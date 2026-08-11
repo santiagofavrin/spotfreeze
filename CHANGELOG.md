@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.18.0...v1.19.0) (2026-08-11)
+
+
+### Features
+
+* add diamond and rounded-rect spotlight shapes ([11fa53c](https://github.com/santiagofavrin/spotfreeze/commit/11fa53c45d99676c0c251fe83dee4e03816baee7))
+
 ## [1.18.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.17.0...v1.18.0) (2026-08-03)
 
 
