@@ -69,7 +69,7 @@
 //!   `KeyDown` arm of the event path is deliberately inert.
 
 use crate::capture::{Capturer, DibBuffer, MonitorInfo};
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, SpotlightShape};
 use crate::overlay::composite::{
     RenderState, ZoomFilter, compose_frame, crop_normalized, monitor_index_at, virtual_to_local,
     zoom_resample,
@@ -262,7 +262,7 @@ impl OverlayController {
 
         let settings = settings.clone();
         let monitor_count = monitors.len();
-        let legend = Legend::from_hotkeys(&settings.hotkeys);
+        let legend = Legend::from_hotkeys(&settings.hotkeys, SpotlightShape::Circle);
         let legend_pos: Vec<Point> = originals
             .iter()
             .map(|o| legend.default_origin(o.width, o.height))
@@ -464,6 +464,25 @@ impl OverlayController {
         let effect = state.modes.reset_view();
         for &(m, dirty) in &effect.repaint {
             render_and_present(state, m, dirty);
+        }
+    }
+
+    /// Cycle the spotlight shape to the next variant and rebuild the legend.
+    pub fn cycle_spotlight_shape(&self) {
+        let mut slot = self.inner.borrow_mut();
+        let state = slot.as_mut();
+        if let Some(state) = state {
+            let effect = state.modes.cycle_spotlight_shape();
+            if !effect.repaint.is_empty() {
+                // Rebuild the legend with the new shape.
+                state.legend = Legend::from_hotkeys(
+                    &state.settings.hotkeys,
+                    state.modes.spotlight_shape(),
+                );
+                for &(monitor, dirty) in &effect.repaint {
+                    render_and_present(state, monitor, dirty);
+                }
+            }
         }
     }
 
@@ -1045,7 +1064,6 @@ mod tests {
     //! `snip_copy_and_close` is only exercised while unfrozen (documented
     //! no-op, services untouched).
     use super::*;
-    use crate::geometry::SpotlightShape;
     use crate::overlay::composite::darken;
     use crate::settings::model::AppSettings;
 
@@ -2289,7 +2307,7 @@ mod tests {
             160,
             Rgb::BLACK,
         );
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let origin = legend.default_origin(1024, 160);
         legend.paint(&mut settled, &[true, false, false], origin);
         assert_eq!(p[0].pixels, settled.pixels);
@@ -2336,7 +2354,7 @@ mod tests {
         assert_eq!(crop.pixels, expect.pixels, "no legend pixels in the copy");
         // Discriminator: had the legend been baked into the base, the crop
         // would contain pill pixels.
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let origin = legend.default_origin(1024, 160);
         legend.paint(&mut base, &[true, false, false], origin);
         let baked = crop_normalized(&base, Point::new(80, 40), Point::new(720, 100)).unwrap();
@@ -2363,7 +2381,7 @@ mod tests {
         let original = make_buf(1024, 160, coord_pattern);
         let mut out = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((cursor, 10)),
+            spotlight: Some((cursor, 10, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(
@@ -2381,7 +2399,7 @@ mod tests {
     #[test]
     fn dragging_the_legend_moves_it_and_suppresses_mode_routing() {
         let mut f = freeze_fake_with(big_monitor(), Point::new(400, 100));
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let initial_pos = with_state(&f, |s| s.legend_pos[0]);
         let pill = legend.pill_rect(initial_pos);
         // Click inside the pill but NOT on the close button (far left of the
@@ -2421,7 +2439,7 @@ mod tests {
     #[test]
     fn clicking_the_close_button_hides_the_legend() {
         let mut f = freeze_fake_with(big_monitor(), Point::new(400, 100));
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let initial_pos = with_state(&f, |s| s.legend_pos[0]);
         let close = legend.close_hit_rect(initial_pos);
         let click = Point::new(
@@ -2446,7 +2464,7 @@ mod tests {
         let original = make_buf(1024, 160, coord_pattern);
         let mut expected = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((Point::new(400, 100), 10)),
+            spotlight: Some((Point::new(400, 100), 10, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(
@@ -2487,7 +2505,7 @@ mod tests {
         let original = make_buf(1024, 160, coord_pattern);
         let mut expected = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((Point::new(400, 100), 10)),
+            spotlight: Some((Point::new(400, 100), 10, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(
@@ -2506,7 +2524,7 @@ mod tests {
 
         // A click in the top-center (where the pill would be) forwards to
         // modes: no drag starts, no hide happens.
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let origin = legend.default_origin(1024, 160);
         let pill_center = Point::new(
             origin.x + legend.size().0 as i32 / 2,
@@ -2527,7 +2545,7 @@ mod tests {
     #[test]
     fn legend_position_survives_capture_entry_and_exit() {
         let mut f = freeze_fake_with(big_monitor(), Point::new(400, 100));
-        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+        let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
         let initial_pos = with_state(&f, |s| s.legend_pos[0]);
         let pill = legend.pill_rect(initial_pos);
         let click = Point::new(pill.x + 10, pill.y + pill.height as i32 / 2);

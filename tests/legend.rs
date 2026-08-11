@@ -42,7 +42,7 @@ fn region_sum(buf: &DibBuffer, x0: u32, y0: u32, w: u32, h: u32) -> u64 {
 
 #[test]
 fn default_bindings_render_mode_tabs_with_their_hotkeys() {
-    let legend = Legend::from_hotkeys(&HotkeySettings::default());
+    let legend = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle);
     // The ZOOM tab is labelled with the zoom-modifier wheel chord — zoom is
     // implicit in every mode (no dedicated zoom hotkey).
     assert_eq!(
@@ -70,13 +70,13 @@ fn custom_zoom_modifier_changes_the_zoom_tab_label_and_pill_width() {
         | spotfreeze::hotkeys::gesture::Modifiers::ALT
         | spotfreeze::hotkeys::gesture::Modifiers::SHIFT
         | spotfreeze::hotkeys::gesture::Modifiers::WIN;
-    let legend = Legend::from_hotkeys(&hotkeys);
+    let legend = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
     assert_eq!(
         legend.tab_labels()[1],
         "ZOOM (Ctrl+Alt+Shift+Win+Wheel)",
         "the zoom tab follows the configured zoom modifier"
     );
-    let default_w = Legend::from_hotkeys(&HotkeySettings::default()).size().0;
+    let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle).size().0;
     let wider = legend.size().0;
     assert!(
         wider > default_w,
@@ -154,7 +154,7 @@ fn controller_paints_the_pill_centered_on_every_monitor() {
         ),
     ];
     let f = FakeFreeze::new(captured, &AppSettings::default(), Point::new(512, 100));
-    let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys);
+    let legend = Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
     let (pw, ph) = legend.size();
     for m in 0..2 {
         let frame = f.last_present(m);

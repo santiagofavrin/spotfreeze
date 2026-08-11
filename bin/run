@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+case "${1:-help}" in
+build)
+    cargo build --release --manifest-path "$ROOT/Cargo.toml"
+    echo "Binary: $ROOT/target/release/spotfreeze"
+    ;;
+spotfreeze)
+    exec "$ROOT/target/release/spotfreeze" "${@:2}"
+    ;;
+*)
+    echo "Usage: bin/run <command> [args...]"
+    echo ""
+    echo "Commands:"
+    echo "  build       Build the release binary"
+    echo "  spotfreeze  Run spotfreeze (passes through extra args)"
+    ;;
+esac

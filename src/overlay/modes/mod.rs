@@ -438,6 +438,22 @@ impl ModeStack {
         self.snip.as_ref().and_then(SnipMode::snip_selection)
     }
 
+    /// Cycle the spotlight layer's shape to the next variant.
+    /// Returns `ModeEffect::none()` when the spotlight layer is inactive.
+    pub fn cycle_spotlight_shape(&mut self) -> ModeEffect {
+        match &mut self.spotlight {
+            Some(s) => s.cycle_shape(),
+            None => ModeEffect::none(),
+        }
+    }
+
+    /// Current spotlight shape, or `SpotlightShape::Circle` if spotlight is off.
+    pub fn spotlight_shape(&self) -> SpotlightShape {
+        self.spotlight
+            .as_ref()
+            .map_or(SpotlightShape::Circle, |s| s.shape())
+    }
+
     /// `(zoom_factor, focus)` when the zoom layer is active ON `monitor` —
     /// the composed BASE the snip copy crops from (WYSIWYG with the presented
     /// frame); `None` when zoom is inactive or focused on another monitor.

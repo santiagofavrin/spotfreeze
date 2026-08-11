@@ -24,6 +24,9 @@ pub enum FrozenAction {
     /// emitted by the current plan; kept for the platform shells, which
     /// dispatch every variant to the controller.
     AddMode(ModeKind),
+    /// Cycle the spotlight shape to the next variant (Circle → Diamond →
+    /// RoundedRect → Circle).
+    CycleSpotlightShape,
     Copy,
     Cancel,
     ResetZoom,
@@ -38,9 +41,10 @@ pub struct FrozenRegistration {
 
 /// The ordered frozen-mode registration list derived from the CURRENT
 /// settings: spotlight toggle (`mode_spotlight`), capture-mode switch
-/// (`mode_snip`), then `reset_zoom`, `snip_copy`, `cancel` — five
-/// registrations. The bound keys are just data living in the settings model —
-/// nothing here hardcodes a key name; only the iteration order is fixed.
+/// (`mode_snip`), cycle spotlight shape (`cycle_spotlight_shape`), then
+/// `reset_zoom`, `snip_copy`, `cancel` — six registrations. The bound keys
+/// are just data living in the settings model — nothing here hardcodes a key
+/// name; only the iteration order is fixed.
 ///
 /// Collisions BETWEEN user-configured bindings are NOT resolved here: they
 /// stay in the plan, so the registration layer's duplicate error names the
@@ -54,6 +58,10 @@ pub fn plan_frozen_registrations(hotkeys: &HotkeySettings) -> Vec<FrozenRegistra
             FrozenAction::ToggleMode(ModeKind::Spotlight),
         ),
         (hotkeys.mode_snip, FrozenAction::SetMode(ModeKind::Snip)),
+        (
+            hotkeys.cycle_spotlight_shape,
+            FrozenAction::CycleSpotlightShape,
+        ),
         (hotkeys.reset_zoom, FrozenAction::ResetZoom),
         (hotkeys.snip_copy, FrozenAction::Copy),
         (hotkeys.cancel, FrozenAction::Cancel),
@@ -90,6 +98,7 @@ mod tests {
             freeze_toggle: gesture("Ctrl+Alt+Q"),
             mode_spotlight: gesture("F5"),
             mode_snip: gesture("F7"),
+            cycle_spotlight_shape: gesture("F6"),
             snip_copy: gesture("Ctrl+Enter"),
             cancel: gesture("Ctrl+Backspace"),
             reset_zoom: gesture("Ctrl+F8"),
@@ -106,13 +115,14 @@ mod tests {
     }
 
     #[test]
-    fn plan_is_spotlight_capture_then_reset_copy_cancel() {
+    fn plan_is_spotlight_capture_cycle_reset_copy_cancel() {
         let plan = plan_frozen_registrations(&custom_hotkeys());
         let actual: Vec<(HotkeyGesture, FrozenAction)> =
             plan.iter().map(|r| (r.gesture, r.action)).collect();
         let expected = vec![
             (gesture("F5"), FrozenAction::ToggleMode(ModeKind::Spotlight)),
             (gesture("F7"), FrozenAction::SetMode(ModeKind::Snip)),
+            (gesture("F6"), FrozenAction::CycleSpotlightShape),
             (gesture("Ctrl+F8"), FrozenAction::ResetZoom),
             (gesture("Ctrl+Enter"), FrozenAction::Copy),
             (gesture("Ctrl+Backspace"), FrozenAction::Cancel),
@@ -132,19 +142,25 @@ mod tests {
             planned(&plan, h.mode_snip),
             vec![FrozenAction::SetMode(ModeKind::Snip)]
         );
+        assert_eq!(
+            planned(&plan, h.cycle_spotlight_shape),
+            vec![FrozenAction::CycleSpotlightShape]
+        );
     }
 
     #[test]
-    fn default_settings_plan_has_all_five_registrations() {
+    fn default_settings_plan_has_all_six_registrations() {
         // Structural smoke test over the shipped defaults, whatever keys they
-        // bind: spotlight toggle, capture switch, and the reset/copy/cancel
-        // bindings. Zoom is NOT a hotkey — it is the implicit zoom-modifier
-        // wheel chord, so no `ToggleMode(ModeKind::Zoom)` is registered.
+        // bind: spotlight toggle, capture switch, cycle spotlight shape, and
+        // the reset/copy/cancel bindings. Zoom is NOT a hotkey — it is the
+        // implicit zoom-modifier wheel chord, so no
+        // `ToggleMode(ModeKind::Zoom)` is registered.
         let plan = plan_frozen_registrations(&HotkeySettings::default());
-        assert_eq!(plan.len(), 5);
+        assert_eq!(plan.len(), 6);
         for action in [
             FrozenAction::ToggleMode(ModeKind::Spotlight),
             FrozenAction::SetMode(ModeKind::Snip),
+            FrozenAction::CycleSpotlightShape,
             FrozenAction::ResetZoom,
             FrozenAction::Copy,
             FrozenAction::Cancel,

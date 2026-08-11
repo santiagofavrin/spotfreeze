@@ -35,7 +35,7 @@
 //! (project rule): the pill appears at full strength from the first frame.
 
 use crate::capture::DibBuffer;
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, SpotlightShape};
 use crate::settings::model::{HotkeySettings, Rgb};
 use fontdue::{Font, FontSettings};
 
@@ -160,12 +160,18 @@ impl Legend {
     /// followed by the app version label. The ZOOM tab is labelled with the
     /// zoom-modifier wheel chord (e.g. `Shift+Wheel`) — zoom is implicit in
     /// every mode, reached by the modifier + mouse wheel, so there is no
-    /// dedicated zoom hotkey to show.
-    pub fn from_hotkeys(hotkeys: &HotkeySettings) -> Self {
+    /// dedicated zoom hotkey to show. The spotlight tab name includes a
+    /// Unicode shape indicator for non-circle shapes.
+    pub fn from_hotkeys(hotkeys: &HotkeySettings, shape: SpotlightShape) -> Self {
+        let spotlight_name = match shape {
+            SpotlightShape::Circle => "SPOTLIGHT".to_string(),
+            SpotlightShape::Diamond => "SPOTLIGHT ◇".to_string(),
+            SpotlightShape::RoundedRect => "SPOTLIGHT ▭".to_string(),
+        };
         Self::build(
             &[
                 LegendTab {
-                    name: "SPOTLIGHT".into(),
+                    name: spotlight_name,
                     hotkey: hotkeys.mode_spotlight.to_display(),
                 },
                 LegendTab {
@@ -611,7 +617,7 @@ mod tests {
     #[test]
     fn from_hotkeys_uses_the_freeze_time_bindings() {
         let hotkeys = HotkeySettings::default();
-        let legend = Legend::from_hotkeys(&hotkeys);
+        let legend = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
         assert_eq!(
             legend.tab_labels(),
             vec![
@@ -632,7 +638,7 @@ mod tests {
         let mut hotkeys = HotkeySettings::default();
         hotkeys.zoom_modifier =
             crate::hotkeys::gesture::Modifiers::CTRL | crate::hotkeys::gesture::Modifiers::SHIFT;
-        let legend = Legend::from_hotkeys(&hotkeys);
+        let legend = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
         assert_eq!(legend.tab_labels()[1], "ZOOM (Ctrl+Shift+Wheel)");
     }
 
@@ -640,7 +646,7 @@ mod tests {
 
     #[test]
     fn size_is_nonzero_and_sensible_for_the_font_size() {
-        let legend = Legend::from_hotkeys(&HotkeySettings::default());
+        let legend = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle);
         let (w, h) = legend.size();
         assert!(w > 200, "pill has a sizable width: {w}");
         // The text area is the font's real ascent+descent at 18 px (cap height
@@ -653,12 +659,12 @@ mod tests {
     #[test]
     fn a_longer_binding_widens_the_pill() {
         let mut hotkeys = HotkeySettings::default();
-        let default_w = Legend::from_hotkeys(&HotkeySettings::default()).size().0;
+        let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle).size().0;
         hotkeys.zoom_modifier = crate::hotkeys::gesture::Modifiers::CTRL
             | crate::hotkeys::gesture::Modifiers::ALT
             | crate::hotkeys::gesture::Modifiers::SHIFT
             | crate::hotkeys::gesture::Modifiers::WIN;
-        let wider = Legend::from_hotkeys(&hotkeys).size().0;
+        let wider = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle).size().0;
         assert!(
             wider > default_w,
             "a longer zoom-modifier chord widens the pill: {wider} vs {default_w}"
@@ -668,7 +674,7 @@ mod tests {
     #[test]
     fn the_version_label_widens_the_pill() {
         let hotkeys = HotkeySettings::default();
-        let with_version = Legend::from_hotkeys(&hotkeys);
+        let with_version = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
         let tab_only = Legend::new(&[
             LegendTab {
                 name: "SPOTLIGHT".into(),
@@ -829,7 +835,7 @@ mod tests {
     #[test]
     fn paint_renders_the_version_label_after_the_tabs() {
         let hotkeys = HotkeySettings::default();
-        let with_version = Legend::from_hotkeys(&hotkeys);
+        let with_version = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
         let tab_only = Legend::new(&[
             LegendTab {
                 name: "SPOTLIGHT".into(),

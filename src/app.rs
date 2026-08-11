@@ -487,6 +487,7 @@ fn on_hotkey(state: &mut AppState, hwnd: HWND, wparam: WPARAM) {
         }
         FrozenAction::Cancel => state.controller.unfreeze(),
         FrozenAction::ResetZoom => reset_zoom(state),
+        FrozenAction::CycleSpotlightShape => state.controller.cycle_spotlight_shape(),
     }
     // The controller may have unfrozen itself (snip copy, or a mode asking to
     // exit): drop the frozen-mode hotkeys in that case.

@@ -116,6 +116,18 @@ impl SpotlightMode {
         self.shape
     }
 
+    /// Cycle to the next shape in `SpotlightShape::ALL`, wrapping around.
+    /// Returns a `ModeEffect` that repaints the current hole region (the
+    /// bounding box is the same for all shapes, so only the old region needs
+    /// repainting — the new shape draws into the same bbox).
+    pub fn cycle_shape(&mut self) -> ModeEffect {
+        let current = self.shape as usize;
+        let next = (current + 1) % SpotlightShape::ALL.len();
+        self.shape = SpotlightShape::ALL[next];
+        // Repaint the current hole region — the bbox is the same for all shapes.
+        ModeEffect::repaint(self.cursor_monitor, Some(circle_bbox(self.cursor, self.radius)))
+    }
+
     /// Tracks the cursor; requests a repaint of the hole's old + new regions.
     pub fn on_mouse_move(&mut self, monitor: usize, at: Point) -> ModeEffect {
         if monitor == self.cursor_monitor && at == self.cursor {
