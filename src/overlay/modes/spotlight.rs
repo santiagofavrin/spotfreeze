@@ -5,7 +5,7 @@
 //! [`crate::overlay::modes::ModeStack::render_state`].
 
 use super::ModeEffect;
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, SpotlightShape};
 
 /// Smallest selectable spotlight radius (physical px).
 const MIN_RADIUS: u32 = 10;
@@ -75,6 +75,7 @@ pub struct SpotlightMode {
     cursor: Point,
     cursor_monitor: usize,
     radius: u32,
+    shape: SpotlightShape,
     /// Unconsumed raw wheel delta (truncation remainder; |value| stays below
     /// `WHEEL_DELTA / RADIUS_STEP` after every applied resize).
     wheel_accum: i64,
@@ -85,11 +86,12 @@ impl SpotlightMode {
     ///
     /// The radius is clamped to `10..=1000` px, the same range wheel resizing
     /// is clamped to, so a rogue settings value cannot break the invariant.
-    pub fn new(default_radius: u32) -> Self {
+    pub fn new(default_radius: u32, shape: SpotlightShape) -> Self {
         Self {
             cursor: Point::default(),
             cursor_monitor: 0,
             radius: default_radius.clamp(MIN_RADIUS, MAX_RADIUS),
+            shape,
             wheel_accum: 0,
         }
     }
@@ -107,6 +109,11 @@ impl SpotlightMode {
     /// Monitor the cursor (and therefore the hole) is on.
     pub fn cursor_monitor(&self) -> usize {
         self.cursor_monitor
+    }
+
+    /// Spotlight shape (circle, diamond, or rounded_rect).
+    pub fn shape(&self) -> SpotlightShape {
+        self.shape
     }
 
     /// Tracks the cursor; requests a repaint of the hole's old + new regions.
@@ -166,14 +173,14 @@ mod tests {
 
     #[test]
     fn new_clamps_default_radius() {
-        assert_eq!(SpotlightMode::new(5).radius(), MIN_RADIUS);
-        assert_eq!(SpotlightMode::new(5000).radius(), MAX_RADIUS);
-        assert_eq!(SpotlightMode::new(100).radius(), 100);
+        assert_eq!(SpotlightMode::new(5, SpotlightShape::Circle).radius(), MIN_RADIUS);
+        assert_eq!(SpotlightMode::new(5000, SpotlightShape::Circle).radius(), MAX_RADIUS);
+        assert_eq!(SpotlightMode::new(100, SpotlightShape::Circle).radius(), 100);
     }
 
     #[test]
     fn new_starts_cursor_at_origin_monitor_zero() {
-        let m = SpotlightMode::new(100);
+        let m = SpotlightMode::new(100, SpotlightShape::Circle);
         assert_eq!(m.cursor(), Point::new(0, 0));
         assert_eq!(m.cursor_monitor(), 0);
     }
@@ -182,13 +189,13 @@ mod tests {
 
     #[test]
     fn mouse_move_same_position_is_noop() {
-        let mut m = SpotlightMode::new(50);
+        let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
         assert_eq!(m.on_mouse_move(0, Point::new(0, 0)), ModeEffect::none());
     }
 
     #[test]
     fn mouse_move_dirty_is_union_of_old_and_new_circle() {
-        let mut m = SpotlightMode::new(50);
+        let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
         // First move from the default (0,0) to (100,100): union of both
         // radius-50 circle bboxes = [-50,-50 .. 151,151).
         let e = m.on_mouse_move(0, Point::new(100, 100));
@@ -200,7 +207,7 @@ mod tests {
 
     #[test]
     fn mouse_move_to_other_monitor_repaints_both() {
-        let mut m = SpotlightMode::new(20);
+        let mut m = SpotlightMode::new(20, SpotlightShape::Circle);
         m.on_mouse_move(0, Point::new(100, 100));
         let e = m.on_mouse_move(1, Point::new(30, 40));
         assert_eq!(
@@ -218,7 +225,7 @@ mod tests {
 
     #[test]
     fn wheel_resizes_120_delta_is_10px() {
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         // Union of the r=100 and r=90 circle bboxes at (0,0).
         let e = m.on_wheel(0, Point::new(0, 0), 120);
         assert_eq!(m.radius(), 90);
@@ -230,7 +237,7 @@ mod tests {
 
     #[test]
     fn wheel_multi_notch_and_fine_delta_scale_proportionally() {
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 240);
         assert_eq!(m.radius(), 80);
         m.on_wheel(0, Point::new(0, 0), 60);
@@ -243,7 +250,7 @@ mod tests {
     fn wheel_sub_notch_deltas_still_resize() {
         // D2 regression: precision touchpads send sub-notch deltas (|delta| <
         // 120). Four +60 events MUST change the radius (-5 px each).
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         for _ in 0..4 {
             m.on_wheel(0, Point::new(0, 0), 60);
         }
@@ -259,7 +266,7 @@ mod tests {
     fn wheel_tiny_deltas_accumulate_to_whole_pixels() {
         // D2 regression: very fine deltas below one pixel per event (+6 raw =
         // 0.5 px) must NOT be dropped — they bank until a whole pixel exists.
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 6);
         assert_eq!(m.radius(), 100, "first +6 banks 0.5 px: no change yet");
         m.on_wheel(0, Point::new(0, 0), 6);
@@ -275,7 +282,7 @@ mod tests {
     fn wheel_remainder_carries_across_events_without_drift() {
         // +130 twice = 260 raw = 21.67 px; Bresenham banking yields exactly
         // 21 px split 10 + 11 (the truncation remainder is never lost).
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 130);
         assert_eq!(m.radius(), 90);
         m.on_wheel(0, Point::new(0, 0), 130);
@@ -285,7 +292,7 @@ mod tests {
         m.on_wheel(0, Point::new(0, 0), 120);
         assert_eq!(m.radius(), 69);
         // Direction reversal is symmetric: ±60 cancel exactly.
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 60);
         m.on_wheel(0, Point::new(0, 0), -60);
         assert_eq!(m.radius(), 100);
@@ -293,18 +300,18 @@ mod tests {
 
     #[test]
     fn wheel_clamps_at_min_and_max() {
-        let mut m = SpotlightMode::new(MIN_RADIUS);
+        let mut m = SpotlightMode::new(MIN_RADIUS, SpotlightShape::Circle);
         let e = m.on_wheel(0, Point::new(0, 0), 120);
         assert_eq!(m.radius(), MIN_RADIUS);
         assert_eq!(e, ModeEffect::none()); // clamped: nothing changed
 
-        let mut m = SpotlightMode::new(MAX_RADIUS);
+        let mut m = SpotlightMode::new(MAX_RADIUS, SpotlightShape::Circle);
         let e = m.on_wheel(0, Point::new(0, 0), -120);
         assert_eq!(m.radius(), MAX_RADIUS);
         assert_eq!(e, ModeEffect::none());
 
         // A huge delta lands exactly on the clamp, not past it.
-        let mut m = SpotlightMode::new(100);
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), -120 * 1000);
         assert_eq!(m.radius(), MAX_RADIUS);
         m.on_wheel(0, Point::new(0, 0), 120 * 1000);
@@ -313,7 +320,7 @@ mod tests {
 
     #[test]
     fn wheel_tracks_cursor_and_covers_both_circles() {
-        let mut m = SpotlightMode::new(50);
+        let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
         m.on_mouse_move(0, Point::new(200, 200));
         // Wheel at a different position: cursor follows the wheel event.
         let e = m.on_wheel(0, Point::new(100, 100), 120);

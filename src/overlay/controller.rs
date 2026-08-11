@@ -558,6 +558,7 @@ fn mode_params(settings: &AppSettings) -> ModeParams {
     );
     ModeParams {
         spotlight_radius: settings.spotlight.default_radius,
+        spotlight_shape: settings.spotlight.shape,
         zoom_step,
         zoom_min,
         zoom_max,
@@ -1044,6 +1045,7 @@ mod tests {
     //! `snip_copy_and_close` is only exercised while unfrozen (documented
     //! no-op, services untouched).
     use super::*;
+    use crate::geometry::SpotlightShape;
     use crate::overlay::composite::darken;
     use crate::settings::model::AppSettings;
 
@@ -2044,7 +2046,7 @@ mod tests {
         let original = make_buf(32, 32, coord_pattern);
         let mut out = DibBuffer::new(32, 32);
         let state = RenderState {
-            spotlight: Some((Point::new(16, 16), radius)),
+            spotlight: Some((Point::new(16, 16), radius, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(
@@ -2276,7 +2278,7 @@ mod tests {
         let original = make_buf(1024, 160, coord_pattern);
         let mut settled = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((Point::new(400, 100), 10)),
+            spotlight: Some((Point::new(400, 100), 10, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(
@@ -2319,7 +2321,7 @@ mod tests {
         let original = make_buf(1024, 160, coord_pattern);
         let mut base = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((Point::new(400, 100), 10)),
+            spotlight: Some((Point::new(400, 100), 10, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(

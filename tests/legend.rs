@@ -17,7 +17,7 @@ mod common;
 
 use common::{FakeFreeze, buffer_with, monitor_info};
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::overlay::composite::{RenderState, compose_frame};
 use spotfreeze::overlay::legend::{Legend, LegendTab};
 use spotfreeze::settings::model::{AppSettings, HotkeySettings};
@@ -166,7 +166,7 @@ fn controller_paints_the_pill_centered_on_every_monitor() {
         // Reference: the same monitor's composed frame without the pill.
         let mut bare = DibBuffer::new(1024, 160);
         let state = RenderState {
-            spotlight: Some((Point::new(512, 100), 150)),
+            spotlight: Some((Point::new(512, 100), 150, SpotlightShape::Circle)),
             ..RenderState::default()
         };
         compose_frame(

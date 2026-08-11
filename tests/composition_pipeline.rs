@@ -28,7 +28,7 @@ mod common;
 
 use common::{BLACK, buffer_with, dimmed_pixel_with, pattern_a};
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::overlay::composite::{
     RenderState, ZoomFilter, compose_frame, crop_normalized, zoom_resample,
 };
@@ -55,7 +55,7 @@ fn zoom_plus_spotlight_hole_reveals_zoomed_base_dimmed_zoomed_outside() {
     let radius = 3u32;
     let state = RenderState {
         zoom: Some((2.0, focus)),
-        spotlight: Some((center, radius)),
+        spotlight: Some((center, radius, SpotlightShape::Circle)),
         snip: None,
         capture: false,
     };
@@ -199,7 +199,7 @@ fn zoom_spotlight_snip_all_layers_compose_in_spec_order() {
     let radius = 2u32;
     let state = RenderState {
         zoom: Some((2.0, focus)),
-        spotlight: Some((center, radius)),
+        spotlight: Some((center, radius, SpotlightShape::Circle)),
         snip: Some((Point::new(4, 4), Point::new(12, 10))),
         capture: false,
     };

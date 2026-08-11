@@ -45,7 +45,7 @@
 //!   per-monitor [`crate::overlay::composite::RenderState`] and hands it to
 //!   `compose_frame` — layers never touch pixels themselves.
 
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, SpotlightShape};
 use crate::hotkeys::gesture::Modifiers;
 use crate::overlay::composite::RenderState;
 
@@ -116,6 +116,8 @@ pub struct SnipSelection {
 pub struct ModeParams {
     /// Spotlight circle radius at activation (settings: `spotlight.default_radius`).
     pub spotlight_radius: u32,
+    /// Spotlight shape (settings: `spotlight.shape`).
+    pub spotlight_shape: SpotlightShape,
     /// Zoom wheel step factor (> 1.0; settings: `zoom.step_factor`).
     pub zoom_step: f32,
     /// Minimum zoom (>= 1.0; settings: `zoom.min`).
@@ -163,7 +165,7 @@ impl ModeStack {
     /// spec) and the last-used zoom factor starts at 1.0.
     pub fn new(params: ModeParams) -> Self {
         Self {
-            spotlight: Some(SpotlightMode::new(params.spotlight_radius)),
+            spotlight: Some(SpotlightMode::new(params.spotlight_radius, params.spotlight_shape)),
             zoom: None,
             snip: None,
             last_zoom: 1.0,
@@ -272,7 +274,7 @@ impl ModeStack {
     fn activate(&mut self, kind: ModeKind) {
         match kind {
             ModeKind::Spotlight => {
-                self.spotlight = Some(SpotlightMode::new(self.params.spotlight_radius));
+                self.spotlight = Some(SpotlightMode::new(self.params.spotlight_radius, self.params.spotlight_shape));
             }
             ModeKind::Zoom => {
                 self.zoom = Some(ZoomMode::with_zoom(
@@ -455,7 +457,7 @@ impl ModeStack {
             .spotlight
             .as_ref()
             .filter(|s| s.cursor_monitor() == monitor)
-            .map(|s| (s.cursor(), s.radius()));
+            .map(|s| (s.cursor(), s.radius(), s.shape()));
         let zoom = self
             .zoom
             .as_ref()
@@ -485,6 +487,7 @@ mod tests {
     fn params() -> ModeParams {
         ModeParams {
             spotlight_radius: 100,
+            spotlight_shape: SpotlightShape::Circle,
             zoom_step: 1.25,
             zoom_min: 1.0,
             zoom_max: 100.0,
@@ -1094,7 +1097,7 @@ mod tests {
         let mut stack = ModeStack::new(params());
         stack.seed_cursor(0, pt(30, 40));
         let rs = stack.render_state(0);
-        assert_eq!(rs.spotlight, Some((pt(30, 40), 100)));
+        assert_eq!(rs.spotlight, Some((pt(30, 40), 100, SpotlightShape::Circle)));
         assert_eq!(rs.zoom, None);
         assert_eq!(rs.snip, None);
         assert!(!rs.capture);
@@ -1114,7 +1117,7 @@ mod tests {
         let rs = stack.render_state(0);
         assert_eq!(
             rs.spotlight,
-            Some((pt(9, 9), 100)),
+            Some((pt(9, 9), 100, SpotlightShape::Circle)),
             "cursor followed the move"
         );
         let (z, focus) = rs.zoom.expect("zoom on monitor 0");

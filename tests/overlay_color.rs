@@ -19,7 +19,7 @@ mod common;
 
 use common::{BLACK, buffer_with, darkened_pixel, dim_color_channel, dimmed_pixel_with, pattern_a};
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::overlay::composite::{RenderState, compose_frame, darken};
 use spotfreeze::settings::model::Rgb;
 
@@ -161,7 +161,7 @@ fn compose_frame_spotlight_only_reveals_original_colored_dim_outside() {
     let radius = 5u32;
     let state = RenderState {
         zoom: None,
-        spotlight: Some((center, radius)),
+        spotlight: Some((center, radius, SpotlightShape::Circle)),
         snip: None,
         capture: false,
     };

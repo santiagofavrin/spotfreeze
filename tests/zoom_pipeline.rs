@@ -31,7 +31,7 @@ mod common;
 
 use common::buffer_with;
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::hotkeys::gesture::Modifiers;
 use spotfreeze::overlay::composite::{ZoomFilter, zoom_resample};
 use spotfreeze::overlay::modes::zoom::ZoomMode;
@@ -59,6 +59,7 @@ const DEFAULT_ZOOM: (f32, f32, f32) = (1.25, 1.0, 16.0);
 fn default_params() -> ModeParams {
     ModeParams {
         spotlight_radius: 150,
+        spotlight_shape: SpotlightShape::Circle,
         zoom_step: DEFAULT_ZOOM.0,
         zoom_min: DEFAULT_ZOOM.1,
         zoom_max: DEFAULT_ZOOM.2,
@@ -304,7 +305,7 @@ fn render_state_zoom_modifier_wheel_zooms_when_layer_active() {
     assert_eq!(rs.zoom, Some((zoom, Point::new(8, 8))));
     // Spotlight is still active too (implicit activation is additive): the
     // hole follows the same cursor.
-    assert_eq!(rs.spotlight, Some((Point::new(8, 8), 150)));
+    assert_eq!(rs.spotlight, Some((Point::new(8, 8), 150, SpotlightShape::Circle)));
 }
 
 /// Small namespace so the uniform-source tests read cleanly.

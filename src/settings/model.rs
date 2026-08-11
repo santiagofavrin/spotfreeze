@@ -8,6 +8,7 @@
 //! the serde impls on [`HotkeyGesture`] / [`Modifiers`]. The overlay veil
 //! color is stored as a `"#RRGGBB"` hex string via [`Rgb`]'s serde impls.
 
+use crate::geometry::SpotlightShape;
 use crate::hotkeys::gesture::{HotkeyGesture, Modifiers};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -159,12 +160,15 @@ pub struct SpotlightSettings {
     /// Spotlight circle radius at freeze time, in physical pixels of the
     /// monitor under the cursor. Default: 150.
     pub default_radius: u32,
+    /// Spotlight shape: "circle" (default), "diamond", or "rounded_rect".
+    pub shape: SpotlightShape,
 }
 
 impl Default for SpotlightSettings {
     fn default() -> Self {
         Self {
             default_radius: 150,
+            shape: SpotlightShape::Circle,
         }
     }
 }
@@ -305,6 +309,7 @@ mod tests {
         assert_eq!(d.hotkeys, HotkeySettings::default());
         assert_eq!(d.overlay, OverlaySettings::default());
         assert_eq!(d.spotlight.default_radius, 150);
+        assert_eq!(d.spotlight.shape, SpotlightShape::Circle);
         assert_eq!(d.zoom.step_factor, 1.25);
         assert_eq!(d.zoom.min, 1.0);
         assert_eq!(d.zoom.max, 16.0);

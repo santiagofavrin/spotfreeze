@@ -25,7 +25,7 @@ mod common;
 
 use common::{BLACK, buffer_with, darkened_pixel, pattern_a, pattern_b};
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::overlay::composite::{darken, monitor_index_at, spotlight_hole, virtual_to_local};
 
 /// `overlay.dim_opacity` documented default.
@@ -115,7 +115,7 @@ fn freeze_darken_then_spotlight_restores_exactly_inside_circle() {
     let center = Point::new(20, 24);
     let radius = 12u32;
     let mut frame0 = dark0.clone();
-    spotlight_hole(&mut frame0, &orig0, center, radius);
+    spotlight_hole(&mut frame0, &orig0, center, radius, SpotlightShape::Circle);
 
     let mut inside_count = 0u32;
     for y in 0..mon0.height {
@@ -150,7 +150,7 @@ fn freeze_darken_then_spotlight_restores_exactly_inside_circle() {
     // The hole on monitor 0 must not leak into monitor 1's frame, and monitor
     // 1's hole restores ITS OWN original pattern (buffer-local coordinates).
     let mut frame1 = dark1.clone();
-    spotlight_hole(&mut frame1, &orig1, Point::new(10, 10), 8);
+    spotlight_hole(&mut frame1, &orig1, Point::new(10, 10), 8, SpotlightShape::Circle);
     assert_eq!(frame1.pixel(10, 10).unwrap(), pattern_b(10, 10));
     assert_eq!(
         frame1.pixel(18, 10).unwrap(),
@@ -172,7 +172,7 @@ fn spotlight_hole_clips_when_center_is_outside_buffer() {
 
     // Center beyond the top-left corner; only the overlapping arc is restored.
     let mut frame = dark.clone();
-    spotlight_hole(&mut frame, &orig, Point::new(-6, -6), 10);
+    spotlight_hole(&mut frame, &orig, Point::new(-6, -6), 10, SpotlightShape::Circle);
     for y in 0..32 {
         for x in 0..32 {
             let dx = x as i64 + 6;
@@ -220,7 +220,7 @@ fn end_to_end_negative_virtual_x_cursor_maps_to_monitor_local_hole() {
     let center = virtual_to_local(cursor_virtual, monitors[idx]);
     assert_eq!(center, Point::new(34, 20));
 
-    spotlight_hole(&mut frames[idx], originals[idx], center, 10);
+    spotlight_hole(&mut frames[idx], originals[idx], center, 10, SpotlightShape::Circle);
 
     // Restored pixels come from monitor 1's OWN pattern at the mapped center.
     assert_eq!(frames[idx].pixel(34, 20).unwrap(), pattern_b(34, 20));

@@ -13,7 +13,7 @@ mod common;
 
 use common::{BLACK, buffer_with, pattern_a};
 use spotfreeze::capture::DibBuffer;
-use spotfreeze::geometry::{Point, Rect};
+use spotfreeze::geometry::{Point, Rect, SpotlightShape};
 use spotfreeze::hotkeys::gesture::Modifiers;
 use spotfreeze::overlay::composite::{RenderState, compose_frame, crop_normalized};
 use spotfreeze::overlay::modes::{ModeKind, ModeParams, ModeStack};
@@ -31,6 +31,7 @@ fn viewport() -> Rect {
 fn params() -> ModeParams {
     ModeParams {
         spotlight_radius: 5,
+        spotlight_shape: SpotlightShape::Circle,
         zoom_step: 1.25,
         zoom_min: 1.0,
         zoom_max: 16.0,

@@ -106,6 +106,65 @@ impl Rect {
 }
 
 // ---------------------------------------------------------------------------
+// SpotlightShape
+// ---------------------------------------------------------------------------
+
+/// Shape of the spotlight hole in the overlay.
+///
+/// Serialized as a lowercase string in settings JSONC.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SpotlightShape {
+    /// A perfect circle (default).
+    Circle,
+    /// A 45° rotated square (diamond).
+    Diamond,
+    /// A square with rounded corners; corner radius = `radius / 3`.
+    RoundedRect,
+}
+
+impl SpotlightShape {
+    /// All defined shapes, for iteration/validation.
+    pub const ALL: &'static [Self] = &[Self::Circle, Self::Diamond, Self::RoundedRect];
+}
+
+impl std::fmt::Display for SpotlightShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Circle => write!(f, "circle"),
+            Self::Diamond => write!(f, "diamond"),
+            Self::RoundedRect => write!(f, "rounded_rect"),
+        }
+    }
+}
+
+impl std::str::FromStr for SpotlightShape {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "circle" => Ok(Self::Circle),
+            "diamond" => Ok(Self::Diamond),
+            "rounded_rect" => Ok(Self::RoundedRect),
+            _ => Err(format!(
+                "unknown spotlight shape: {s:?} (expected circle, diamond, or rounded_rect)"
+            )),
+        }
+    }
+}
+
+impl serde::Serialize for SpotlightShape {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SpotlightShape {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests (headless-safe)
 // ---------------------------------------------------------------------------
 
@@ -291,5 +350,57 @@ mod tests {
             None,
             "touch at x=0"
         );
+    }
+
+    // -- SpotlightShape -----------------------------------------------------------
+
+    #[test]
+    fn spotlight_shape_display_and_parse_roundtrip() {
+        for shape in SpotlightShape::ALL {
+            let s = shape.to_string();
+            let parsed: SpotlightShape = s.parse().unwrap();
+            assert_eq!(parsed, *shape, "round-trip of {s:?}");
+        }
+    }
+
+    #[test]
+    fn spotlight_shape_parse_unknown_returns_err() {
+        let err = "bogus".parse::<SpotlightShape>().unwrap_err();
+        assert!(err.contains("bogus"), "error message includes the bad input: {err}");
+        assert!(err.contains("circle"), "error message lists valid options: {err}");
+    }
+
+    #[test]
+    fn spotlight_shape_serde_roundtrip() {
+        for shape in SpotlightShape::ALL {
+            let json = serde_json::to_string(shape).unwrap();
+            let parsed: SpotlightShape = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, *shape, "serde round-trip of {json}");
+        }
+    }
+
+    #[test]
+    fn spotlight_shape_serde_deserializes_case_sensitively() {
+        // The serde impl delegates to FromStr, which is case-sensitive.
+        assert!(serde_json::from_str::<SpotlightShape>("\"CIRCLE\"").is_err());
+        assert!(serde_json::from_str::<SpotlightShape>("\"Circle\"").is_err());
+        assert_eq!(
+            serde_json::from_str::<SpotlightShape>("\"circle\"").unwrap(),
+            SpotlightShape::Circle
+        );
+    }
+
+    #[test]
+    fn spotlight_shape_default_is_circle() {
+        // Circle is the first variant and the backward-compatible default.
+        assert_eq!(SpotlightShape::ALL[0], SpotlightShape::Circle);
+    }
+
+    #[test]
+    fn spotlight_shape_all_contains_three_variants() {
+        assert_eq!(SpotlightShape::ALL.len(), 3);
+        assert!(SpotlightShape::ALL.contains(&SpotlightShape::Circle));
+        assert!(SpotlightShape::ALL.contains(&SpotlightShape::Diamond));
+        assert!(SpotlightShape::ALL.contains(&SpotlightShape::RoundedRect));
     }
 }

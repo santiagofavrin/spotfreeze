@@ -11,7 +11,7 @@
 //! snip selection (interior + border ring) → capture-mode indicator frame**.
 
 use crate::capture::DibBuffer;
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, SpotlightShape};
 use crate::settings::model::Rgb;
 
 /// Darken `buf` IN PLACE by blending toward the veil `color`:
@@ -46,6 +46,29 @@ pub fn darken(buf: &mut DibBuffer, dim_alpha: u8, color: Rgb) {
     }
 }
 
+/// Restore the ORIGINAL image inside the spotlight shape: copy pixels from
+/// `src_original` into `dst_darkened` for every pixel whose position lies within
+/// the shape defined by `center`, `radius`, and `shape`.
+///
+/// Both buffers MUST have identical dimensions (same width/height/stride);
+/// `center` may be outside the buffer (the copied region is simply clipped).
+/// This is the per-mouse-move fast path: cost is O(shape area).
+pub fn spotlight_hole(
+    dst_darkened: &mut DibBuffer,
+    src_original: &DibBuffer,
+    center: Point,
+    radius: u32,
+    shape: SpotlightShape,
+) {
+    match shape {
+        SpotlightShape::Circle => spotlight_hole_circle(dst_darkened, src_original, center, radius),
+        SpotlightShape::Diamond => spotlight_hole_diamond(dst_darkened, src_original, center, radius),
+        SpotlightShape::RoundedRect => {
+            spotlight_hole_rounded_rect(dst_darkened, src_original, center, radius)
+        }
+    }
+}
+
 /// Restore the ORIGINAL image inside the spotlight circle: copy pixels from
 /// `src_original` into `dst_darkened` for every pixel whose position lies within
 /// `radius` px of `center` (`dx*dx + dy*dy <= radius*radius`).
@@ -53,7 +76,7 @@ pub fn darken(buf: &mut DibBuffer, dim_alpha: u8, color: Rgb) {
 /// Both buffers MUST have identical dimensions (same width/height/stride);
 /// `center` may be outside the buffer (the copied region is simply clipped).
 /// This is the per-mouse-move fast path: cost is O(circle area).
-pub fn spotlight_hole(
+fn spotlight_hole_circle(
     dst_darkened: &mut DibBuffer,
     src_original: &DibBuffer,
     center: Point,
@@ -99,6 +122,122 @@ pub fn spotlight_hole(
         }
         // One contiguous memcpy per row — O(1) per pixel with no per-pixel
         // predicate evaluation.
+        let len = ((x1 - x0 + 1) * 4) as usize;
+        let di = y as usize * dstride + x0 as usize * 4;
+        let si = y as usize * sstride + x0 as usize * 4;
+        dst_darkened.pixels[di..di + len].copy_from_slice(&src_original.pixels[si..si + len]);
+    }
+}
+
+/// Restore the ORIGINAL image inside a diamond (45° rotated square): copy
+/// pixels from `src_original` into `dst_darkened` for every pixel whose
+/// position satisfies `|dx| + |dy| <= radius`.
+///
+/// Same buffer contract as [`spotlight_hole_circle`].
+fn spotlight_hole_diamond(
+    dst_darkened: &mut DibBuffer,
+    src_original: &DibBuffer,
+    center: Point,
+    radius: u32,
+) {
+    debug_assert_eq!(dst_darkened.width, src_original.width);
+    debug_assert_eq!(dst_darkened.height, src_original.height);
+    debug_assert_eq!(dst_darkened.stride, src_original.stride);
+    let w = dst_darkened.width.min(src_original.width) as i64;
+    let h = dst_darkened.height.min(src_original.height) as i64;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+
+    let cx = center.x as i64;
+    let cy = center.y as i64;
+    let r = radius as i64;
+
+    // Vertical span the diamond can touch, clipped to the buffer.
+    let y0 = (cy - r).max(0);
+    let y1 = (cy + r).min(h - 1);
+    if y0 > y1 {
+        return;
+    }
+
+    let dstride = dst_darkened.stride as usize;
+    let sstride = src_original.stride as usize;
+
+    for y in y0..=y1 {
+        let dy = (y - cy).unsigned_abs() as i64;
+        if dy > r {
+            continue;
+        }
+        // Horizontal half-span at this row: |dx| <= r - |dy|.
+        let dx_max = r - dy;
+        let x0 = (cx - dx_max).max(0);
+        let x1 = (cx + dx_max).min(w - 1);
+        if x0 > x1 {
+            continue;
+        }
+        let len = ((x1 - x0 + 1) * 4) as usize;
+        let di = y as usize * dstride + x0 as usize * 4;
+        let si = y as usize * sstride + x0 as usize * 4;
+        dst_darkened.pixels[di..di + len].copy_from_slice(&src_original.pixels[si..si + len]);
+    }
+}
+
+/// Restore the ORIGINAL image inside a rounded rectangle: copy pixels from
+/// `src_original` into `dst_darkened` for every pixel whose position lies
+/// within a square of side `2*radius + 1` with rounded corners of radius
+/// `cr = max(1, radius / 3)`.
+///
+/// Same buffer contract as [`spotlight_hole_circle`].
+fn spotlight_hole_rounded_rect(
+    dst_darkened: &mut DibBuffer,
+    src_original: &DibBuffer,
+    center: Point,
+    radius: u32,
+) {
+    debug_assert_eq!(dst_darkened.width, src_original.width);
+    debug_assert_eq!(dst_darkened.height, src_original.height);
+    debug_assert_eq!(dst_darkened.stride, src_original.stride);
+    let w = dst_darkened.width.min(src_original.width) as i64;
+    let h = dst_darkened.height.min(src_original.height) as i64;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+
+    let cx = center.x as i64;
+    let cy = center.y as i64;
+    let r = radius as i64;
+    let cr = (radius / 3).max(1) as i64; // corner radius, at least 1
+    let crr = cr * cr; // corner radius squared
+
+    // Vertical span the rounded rect can touch, clipped to the buffer.
+    let y0 = (cy - r).max(0);
+    let y1 = (cy + r).min(h - 1);
+    if y0 > y1 {
+        return;
+    }
+
+    let dstride = dst_darkened.stride as usize;
+    let sstride = src_original.stride as usize;
+
+    for y in y0..=y1 {
+        let dy = (y - cy).unsigned_abs() as i64;
+        if dy > r {
+            continue;
+        }
+        // Full-width region in the middle, rounded corners at the top/bottom.
+        let dx_max = if dy <= r - cr {
+            r // full width
+        } else {
+            // Corner region: dx_max = r - cr + sqrt(cr^2 - (dy - (r - cr))^2)
+            let corner_dy = dy - (r - cr);
+            let corner_dx = isqrt_u64((crr - corner_dy * corner_dy) as u64) as i64;
+            r - cr + corner_dx
+        };
+        let x0 = (cx - dx_max).max(0);
+        let x1 = (cx + dx_max).min(w - 1);
+        if x0 > x1 {
+            continue;
+        }
         let len = ((x1 - x0 + 1) * 4) as usize;
         let di = y as usize * dstride + x0 as usize * 4;
         let si = y as usize * sstride + x0 as usize * 4;
@@ -262,9 +401,9 @@ pub struct RenderState {
     /// `factor` is the magnification (>= 1.0), `focus` the monitor-local
     /// cursor position the zoomed view is centered on.
     pub zoom: Option<(f32, Point)>,
-    /// `(center, radius)` when the spotlight layer is active on this monitor:
-    /// the circle of undarkened base around the cursor (monitor-local).
-    pub spotlight: Option<(Point, u32)>,
+    /// `(center, radius, shape)` when the spotlight layer is active on this monitor:
+    /// the circle/diamond/rounded-rect of undarkened base around the cursor (monitor-local).
+    pub spotlight: Option<(Point, u32, SpotlightShape)>,
     /// `(a, b)` drag endpoints of the snip selection (monitor-local, ANY drag
     /// direction — normalized internally) when present on this monitor.
     pub snip: Option<(Point, Point)>,
@@ -326,9 +465,9 @@ pub fn compose_frame(
     copy_into(out, base);
     darken(out, dim_alpha, color);
 
-    // 3. Spotlight hole reveals the undarkened base inside the circle.
-    if let Some((center, radius)) = state.spotlight {
-        spotlight_hole(out, base, center, radius);
+    // 3. Spotlight hole reveals the undarkened base inside the spotlight shape.
+    if let Some((center, radius, shape)) = state.spotlight {
+        spotlight_hole(out, base, center, radius, shape);
     }
 
     // 4. Snip selection: interior reveals the undarkened base; the two-tone
@@ -700,7 +839,7 @@ mod tests {
         // 9x9, center (4,4), r=2: verify EVERY pixel against dx^2+dy^2<=4.
         let src = make_buf(9, 9, pattern);
         let mut dst = solid(9, 9, [10, 10, 10, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(4, 4), 2);
+        spotlight_hole(&mut dst, &src, Point::new(4, 4), 2, SpotlightShape::Circle);
         for y in 0..9i32 {
             for x in 0..9i32 {
                 let dx = x - 4;
@@ -724,7 +863,7 @@ mod tests {
     fn spotlight_radius_zero_copies_single_pixel() {
         let src = make_buf(5, 5, pattern);
         let mut dst = solid(5, 5, [0, 0, 0, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(2, 3), 0);
+        spotlight_hole(&mut dst, &src, Point::new(2, 3), 0, SpotlightShape::Circle);
         assert_eq!(px(&dst, 2, 3), pattern(2, 3));
         // Everything else untouched.
         for y in 0..5 {
@@ -740,7 +879,7 @@ mod tests {
     fn spotlight_radius_zero_offscreen_copies_nothing() {
         let src = make_buf(4, 4, pattern);
         let mut dst = solid(4, 4, [9, 9, 9, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(-3, 10), 0);
+        spotlight_hole(&mut dst, &src, Point::new(-3, 10), 0, SpotlightShape::Circle);
         assert_eq!(dst, solid(4, 4, [9, 9, 9, 255]));
     }
 
@@ -749,7 +888,7 @@ mod tests {
         // Center (-1,-1) r=2 on 4x4: only pixels with (x+1)^2+(y+1)^2<=4.
         let src = make_buf(4, 4, pattern);
         let mut dst = solid(4, 4, [1, 2, 3, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(-1, -1), 2);
+        spotlight_hole(&mut dst, &src, Point::new(-1, -1), 2, SpotlightShape::Circle);
         for y in 0..4i32 {
             for x in 0..4i32 {
                 let inside = (x + 1) * (x + 1) + (y + 1) * (y + 1) <= 4;
@@ -769,7 +908,7 @@ mod tests {
     fn spotlight_circle_partially_offscreen_bottom_right() {
         let src = make_buf(6, 6, pattern);
         let mut dst = solid(6, 6, [0, 0, 0, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(7, 7), 3);
+        spotlight_hole(&mut dst, &src, Point::new(7, 7), 3, SpotlightShape::Circle);
         for y in 0..6i32 {
             for x in 0..6i32 {
                 let inside = (x - 7) * (x - 7) + (y - 7) * (y - 7) <= 9;
@@ -787,8 +926,160 @@ mod tests {
     fn spotlight_huge_radius_restores_everything() {
         let src = make_buf(32, 24, pattern);
         let mut dst = solid(32, 24, [5, 5, 5, 255]);
-        spotlight_hole(&mut dst, &src, Point::new(16, 12), 10_000);
+        spotlight_hole(&mut dst, &src, Point::new(16, 12), 10_000, SpotlightShape::Circle);
         assert_eq!(dst.pixels, src.pixels);
+    }
+
+    // ---- spotlight_hole shapes (diamond, rounded_rect) --------------------
+
+    #[test]
+    fn spotlight_diamond_exact_boundary() {
+        // 9x9, center (4,4), r=2: verify EVERY pixel against |dx|+|dy|<=2.
+        let src = make_buf(9, 9, pattern);
+        let mut dst = solid(9, 9, [10, 10, 10, 255]);
+        spotlight_hole_diamond(&mut dst, &src, Point::new(4, 4), 2);
+        for y in 0..9i32 {
+            for x in 0..9i32 {
+                let dx = (x - 4).unsigned_abs() as i32;
+                let dy = (y - 4).unsigned_abs() as i32;
+                let inside = dx + dy <= 2;
+                let got = px(&dst, x as u32, y as u32);
+                if inside {
+                    assert_eq!(
+                        got,
+                        pattern(x as u32, y as u32),
+                        "({x},{y}) should be restored"
+                    );
+                } else {
+                    assert_eq!(got, [10, 10, 10, 255], "({x},{y}) should stay dark");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spotlight_diamond_partially_offscreen() {
+        // Center (-1,-1) r=2 on 4x4: only pixels with |dx|+|dy|<=2.
+        let src = make_buf(4, 4, pattern);
+        let mut dst = solid(4, 4, [1, 2, 3, 255]);
+        spotlight_hole_diamond(&mut dst, &src, Point::new(-1, -1), 2);
+        for y in 0..4i32 {
+            for x in 0..4i32 {
+                let dx = (x + 1).unsigned_abs() as i32;
+                let dy = (y + 1).unsigned_abs() as i32;
+                let inside = dx + dy <= 2;
+                let expect = if inside {
+                    pattern(x as u32, y as u32)
+                } else {
+                    [1, 2, 3, 255]
+                };
+                assert_eq!(px(&dst, x as u32, y as u32), expect, "({x},{y})");
+            }
+        }
+    }
+
+    #[test]
+    fn spotlight_rounded_rect_exact_boundary() {
+        // 9x9, center (4,4), r=2, cr = max(1, 2/3) = 1.
+        // Full-width rows: dy <= r - cr = 1 → rows y=3,4,5 are full width.
+        // Corner rows: dy = 2 → corner_dy = 2 - 1 = 1, corner_dx = sqrt(1 - 1) = 0,
+        //   dx_max = 2 - 1 + 0 = 1 → rows y=2,6 have dx_max=1.
+        let src = make_buf(9, 9, pattern);
+        let mut dst = solid(9, 9, [10, 10, 10, 255]);
+        spotlight_hole_rounded_rect(&mut dst, &src, Point::new(4, 4), 2);
+        for y in 0..9i32 {
+            for x in 0..9i32 {
+                let dx = (x - 4).unsigned_abs() as i32;
+                let dy = (y - 4).unsigned_abs() as i32;
+                // Must be within the vertical span (dy <= r) first.
+                let inside = dy <= 2
+                    && if dy <= 1 {
+                        dx <= 2 // full width
+                    } else {
+                        // dy == 2: corner row
+                        dx <= 1
+                    };
+                let got = px(&dst, x as u32, y as u32);
+                if inside {
+                    assert_eq!(
+                        got,
+                        pattern(x as u32, y as u32),
+                        "({x},{y}) should be restored"
+                    );
+                } else {
+                    assert_eq!(got, [10, 10, 10, 255], "({x},{y}) should stay dark");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spotlight_rounded_rect_large_corner_radius() {
+        // 21x21, center (10,10), r=10, cr = max(1, 10/3) = 3.
+        // Full-width rows: dy <= 10 - 3 = 7.
+        // Corner rows: dy = 8,9,10.
+        let src = make_buf(21, 21, pattern);
+        let mut dst = solid(21, 21, [5, 5, 5, 255]);
+        spotlight_hole_rounded_rect(&mut dst, &src, Point::new(10, 10), 10);
+        let cr = (10 / 3).max(1) as i32;
+        for y in 0..21i32 {
+            for x in 0..21i32 {
+                let dx = (x - 10).unsigned_abs() as i32;
+                let dy = (y - 10).unsigned_abs() as i32;
+                let inside = dy <= 10
+                    && if dy <= 10 - cr {
+                        dx <= 10 // full width
+                    } else {
+                        let corner_dy = dy - (10 - cr);
+                        let corner_dx = ((cr * cr - corner_dy * corner_dy) as f64).sqrt() as i32;
+                        dx <= 10 - cr + corner_dx
+                    };
+                let got = px(&dst, x as u32, y as u32);
+                if inside {
+                    assert_eq!(
+                        got,
+                        pattern(x as u32, y as u32),
+                        "({x},{y}) should be restored"
+                    );
+                } else {
+                    assert_eq!(got, [5, 5, 5, 255], "({x},{y}) should stay dark");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spotlight_dispatch_all_shapes() {
+        // Verify the dispatch function works for all three shapes by checking
+        // that each shape's revealed pixels are a subset of the bounding box.
+        let src = make_buf(15, 15, pattern);
+        let center = Point::new(7, 7);
+        let radius = 5;
+        for shape in [SpotlightShape::Circle, SpotlightShape::Diamond, SpotlightShape::RoundedRect] {
+            let mut dst = solid(15, 15, [0, 0, 0, 255]);
+            spotlight_hole(&mut dst, &src, center, radius, shape);
+            // Every revealed pixel must be inside the bounding box
+            // (a square of side 2*radius+1 centered on center).
+            let r = radius as i32;
+            let bbox = Rect::new(center.x - r, center.y - r, radius * 2 + 1, radius * 2 + 1);
+            for y in 0..15i32 {
+                for x in 0..15i32 {
+                    let got = px(&dst, x as u32, y as u32);
+                    let in_bbox = bbox.contains(Point::new(x, y));
+                    if got != [0, 0, 0, 255] {
+                        assert!(
+                            in_bbox,
+                            "{shape:?}: revealed pixel ({x},{y}) outside bounding box"
+                        );
+                        assert_eq!(
+                            got,
+                            pattern(x as u32, y as u32),
+                            "{shape:?}: revealed pixel ({x},{y}) has wrong value"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // ---- zoom_resample -------------------------------------------------
@@ -1117,7 +1408,7 @@ mod tests {
         let original = make_buf(16, 16, pattern);
         let state = RenderState {
             zoom: None,
-            spotlight: Some((Point::new(8, 8), 2)),
+            spotlight: Some((Point::new(8, 8), 2, SpotlightShape::Circle)),
             snip: None,
             capture: false,
         };
@@ -1149,7 +1440,7 @@ mod tests {
         let focus = Point::new(8, 8);
         let state = RenderState {
             zoom: Some((2.0, focus)),
-            spotlight: Some((Point::new(8, 8), 3)),
+            spotlight: Some((Point::new(8, 8), 3, SpotlightShape::Circle)),
             snip: None,
             capture: false,
         };
