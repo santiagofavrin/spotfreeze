@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.19.0...v1.20.0) (2026-08-11)
+
+
+### Features
+
+* add Q hotkey to cycle spotlight shapes dynamically ([2e53699](https://github.com/santiagofavrin/spotfreeze/commit/2e536990b4b38faad09c70c376b9126e7265dadf))
+
 ## [1.19.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.18.0...v1.19.0) (2026-08-11)
 
 
