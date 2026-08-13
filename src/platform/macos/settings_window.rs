@@ -241,6 +241,8 @@ struct WindowIvars {
     auto_start: Retained<NSButton>,
     show_legend: Retained<NSButton>,
     result: Rc<RefCell<Option<AppSettings>>>,
+    /// Not edited by the window: carried through so a save preserves it.
+    shape: SpotlightShape,
 }
 
 define_class!(
@@ -273,6 +275,7 @@ define_class!(
                     let state: isize = unsafe { msg_send![&*self.ivars().show_legend, state] };
                     state == 1
                 },
+                shape: self.ivars().shape,
             };
             match validate_fields(&f) {
                 Ok(settings) => {
@@ -507,6 +510,7 @@ pub fn run_modal(mtm: MainThreadMarker, current: &AppSettings) -> Option<AppSett
             auto_start: check,
             show_legend,
             result: result.clone(),
+            shape: current.spotlight.shape,
         },
     );
     unsafe {
