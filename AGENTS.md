@@ -74,7 +74,7 @@ a platform shell (OS-specific)? Pure logic in the core, OS glue in the shell.
 
 ## Mode model (don't break these)
 
-- **Spotlight** (`S`) cycles the spotlight shape (Circle → Diamond → RoundedRect
+- **Spotlight** (`S`) cycles the spotlight shape (Circle → Diamond → Star → RoundedRect
   → Rectangle → off) and turns the layer off on the last shape; with every layer
   off the screen stays frozen but completely clear (no dim). Pressing `S` again
   brings the spotlight back at the starting shape (`spotlight.shape` setting,
@@ -88,13 +88,14 @@ a platform shell (OS-specific)? Pure logic in the core, OS glue in the shell.
   becomes the new frozen frame and a drag-selection snips the *effected*
   pixels. `Esc` in capture exits back to the pre-capture view; `Esc` outside
   capture unfreezes.
-- The **legend pill** is painted into the composed frame only — never into the
+- The **legend HUD** is painted into the composed frame only — never into the
   capture originals — so it can never leak into a snip copy or the capture
   re-base (`rebase_freeze` composes without it). Its text is anti-aliased
   vector typography from the embedded **Inter** typeface (SIL OFL 1.1,
   `assets/fonts/`), rasterized once per freeze by the pure-Rust `fontdue`
   crate into cached coverage bitmaps; `Legend::paint` only blits those caches
-  (no font work on the per-frame repaint path).
+  (no font work on the per-frame repaint path). The HUD also draws a vector
+  shape mark and keycap chrome in `paint`; that work stays integer pixel math.
 
 ## Settings
 

@@ -118,6 +118,8 @@ pub enum SpotlightShape {
     Circle,
     /// A 45° rotated square (diamond).
     Diamond,
+    /// A regular 6-pointed star (hexagram): union of two equilateral triangles.
+    Star,
     /// A square with rounded corners; corner radius = `radius / 3`.
     RoundedRect,
     /// A plain square with sharp corners (no rounding).
@@ -129,6 +131,7 @@ impl SpotlightShape {
     pub const ALL: &'static [Self] = &[
         Self::Circle,
         Self::Diamond,
+        Self::Star,
         Self::RoundedRect,
         Self::Rectangle,
     ];
@@ -139,6 +142,7 @@ impl std::fmt::Display for SpotlightShape {
         match self {
             Self::Circle => write!(f, "circle"),
             Self::Diamond => write!(f, "diamond"),
+            Self::Star => write!(f, "star"),
             Self::RoundedRect => write!(f, "rounded_rect"),
             Self::Rectangle => write!(f, "rectangle"),
         }
@@ -151,10 +155,11 @@ impl std::str::FromStr for SpotlightShape {
         match s {
             "circle" => Ok(Self::Circle),
             "diamond" => Ok(Self::Diamond),
+            "star" => Ok(Self::Star),
             "rounded_rect" => Ok(Self::RoundedRect),
             "rectangle" => Ok(Self::Rectangle),
             _ => Err(format!(
-                "unknown spotlight shape: {s:?} (expected circle, diamond, rounded_rect, or rectangle)"
+                "unknown spotlight shape: {s:?} (expected circle, diamond, star, rounded_rect, or rectangle)"
             )),
         }
     }
@@ -383,6 +388,10 @@ mod tests {
             err.contains("circle"),
             "error message lists valid options: {err}"
         );
+        assert!(
+            err.contains("star"),
+            "error message lists star: {err}"
+        );
     }
 
     #[test]
@@ -412,10 +421,11 @@ mod tests {
     }
 
     #[test]
-    fn spotlight_shape_all_contains_four_variants() {
-        assert_eq!(SpotlightShape::ALL.len(), 4);
+    fn spotlight_shape_all_contains_five_variants() {
+        assert_eq!(SpotlightShape::ALL.len(), 5);
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::Circle));
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::Diamond));
+        assert!(SpotlightShape::ALL.contains(&SpotlightShape::Star));
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::RoundedRect));
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::Rectangle));
     }

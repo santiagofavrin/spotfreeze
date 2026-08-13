@@ -653,7 +653,7 @@ mod tests {
     fn plan_writes_heals_a_stale_picked_slot_with_a_full_copy() {
         let w = plan_writes(Some(R), 0, &[true, true], &[false, true]);
         assert_eq!(w.slot, SlotWrite::Full);
-        assert_eq!(w.current[0], true);
+        assert!(w.current[0]);
     }
 
     #[test]

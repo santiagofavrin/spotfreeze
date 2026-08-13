@@ -32,11 +32,10 @@ re-composited from reusable buffers — never a full repaint from scratch.
   below). A persistent accent frame border marks capture mode.
 - **Instant freeze/unfreeze** — the overlay appears and disappears with no
   fade or animation; in-session mode changes are equally immediate.
-- **On-screen legend** — while frozen, a modern translucent "glass" pill
-  near the top of each monitor shows the modes as tabs with the active one
-  highlighted in a brighter chip, labelled with the hotkeys that reach them,
-  followed by the app version. Typography is anti-aliased vector text from
-  the embedded Inter typeface (SIL OFL 1.1).
+- **On-screen legend** — while frozen, a compact HUD near the top of each
+  monitor shows the current spotlight shape, which layers are on, and the
+  freeze-time hotkeys as small keycaps, plus the app version. Typography is
+  anti-aliased vector text from the embedded Inter typeface (SIL OFL 1.1).
 - **Customizable overlay** — set the dim-veil color and opacity, plus a
   separate, lighter veil color and opacity for capture mode.
 - **Every hotkey is rebindable**, with conflict validation. On Windows the
@@ -81,7 +80,7 @@ screen is frozen.
 | Action | Default | Scope |
 | --- | --- | --- |
 | Toggle screen freeze | `Alt+Backtick` | Global — works from any app (in capture mode it backs out of capture first, like `Esc`) |
-| Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
+| Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → Star → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
 | Resize spotlight circle | Mouse wheel | While spotlight is active — the step scales with the current radius, so small spotlights resize tightly and large ones broadly |
@@ -107,7 +106,7 @@ the first frame) and disappears the moment you unfreeze.
 Spotlight and zoom are **layers**; capture is the only real mode switch:
 
 - **`S` (Spotlight) — cycle & toggle.** Cycles the spotlight shape (Circle →
-  Diamond → RoundedRect → Rectangle) then turns it off on the last shape. With
+  Diamond → Star → RoundedRect → Rectangle) then turns it off on the last shape. With
   every layer off, the screen stays frozen (all input still captured) but the
   overlay is completely clear — no dim at all. Pressing `S` again brings the
   spotlight back at the starting shape (`spotlight.shape` setting, default
@@ -265,7 +264,7 @@ Example `spotfreeze.jsonc` (excerpt):
     "dim_opacity": 160,     // 0 = invisible veil, 255 = solid
     "color": "#000000",     // veil color as #RRGGBB (default: black)
   },
-  // Spotlight shape: "circle" (default), "diamond", "rounded_rect", "rectangle".
+  // Spotlight shape: "circle" (default), "diamond", "star", "rounded_rect", "rectangle".
   "spotlight": {
     "default_radius": 150,  // physical pixels
     "shape": "circle",

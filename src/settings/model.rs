@@ -120,7 +120,7 @@ pub struct HotkeySettings {
     /// GLOBAL hotkey: toggle screen freeze. Default: `Alt+Backtick`.
     pub freeze_toggle: HotkeyGesture,
     /// While frozen: toggle the spotlight layer on/off — when active, cycles
-    /// the shape (Circle → Diamond → RoundedRect → Rectangle) then turns off on the last
+    /// the shape (Circle → Diamond → Star → RoundedRect → Rectangle) then turns off on the last
     /// shape. Default: `S`.
     pub mode_spotlight: HotkeyGesture,
     /// While frozen: switch to Capture mode (re-freezes the current view with
@@ -162,7 +162,7 @@ pub struct SpotlightSettings {
     /// Spotlight circle radius at freeze time, in physical pixels of the
     /// monitor under the cursor. Default: 150.
     pub default_radius: u32,
-    /// Spotlight shape: "circle" (default), "diamond", "rounded_rect", or
+    /// Spotlight shape: "circle" (default), "diamond", "star", "rounded_rect", or
     /// "rectangle".
     pub shape: SpotlightShape,
 }

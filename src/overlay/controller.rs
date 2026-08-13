@@ -2203,7 +2203,7 @@ mod tests {
     fn spotlight_toggle_off_repaints_once_to_the_unveiled_endpoint() {
         let mut f = freeze_fake(Point::new(16, 16));
         let before = f.presents[0].borrow().len();
-        // Cycle through all shapes: Circle → Diamond → RoundedRect → Rectangle → off.
+        // Cycle through all shapes: Circle → Diamond → Star → RoundedRect → Rectangle → off.
         // Each press repaints exactly once.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Circle → Diamond
         assert!(f.controller.is_frozen());
@@ -2212,22 +2212,28 @@ mod tests {
             before + 1,
             "first shape advance: one repaint"
         );
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → RoundedRect
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → Star
         assert_eq!(
             f.presents[0].borrow().len(),
             before + 2,
             "second shape advance: one repaint"
         );
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Star → RoundedRect
         assert_eq!(
             f.presents[0].borrow().len(),
             before + 3,
             "third shape advance: one repaint"
         );
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
+        assert_eq!(
+            f.presents[0].borrow().len(),
+            before + 4,
+            "fourth shape advance: one repaint"
+        );
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Rectangle → off
         assert!(f.controller.is_frozen(), "toggling off stays frozen");
         let p = f.presents[0].borrow();
-        assert_eq!(p.len(), before + 4, "four total repaints for full cycle");
+        assert_eq!(p.len(), before + 5, "five total repaints for full cycle");
         assert_eq!(
             p.last().unwrap().pixels,
             make_buf(32, 32, coord_pattern).pixels
@@ -2259,13 +2265,13 @@ mod tests {
             },
         );
         let before = f.presents[0].borrow().len();
-        // Cycle spotlight off (Circle → Diamond → RoundedRect → Rectangle → off).
+        // Cycle spotlight off (Circle → Diamond → Star → RoundedRect → Rectangle → off).
         // With zoom active, the veil stays after spotlight is removed.
         spotlight_off(&mut f);
         let p = f.presents[0].borrow();
-        // Four repaints for the cycle (one per shape advance + off), plus the
+        // Five repaints for the cycle (one per shape advance + off), plus the
         // zoom layer keeps the veil.
-        assert_eq!(p.len(), before + 4, "four repaints for full cycle");
+        assert_eq!(p.len(), before + 5, "five repaints for full cycle");
         // The zoom layer keeps the veil at full strength after the spotlight
         // hole disappears.
         let original = make_buf(32, 32, coord_pattern);
@@ -2300,12 +2306,14 @@ mod tests {
         // Spotlight toggle: cycling through all shapes repaints once per press.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Circle → Diamond
         assert_eq!(f.presents[0].borrow().len(), before + 5);
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → RoundedRect
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → Star
         assert_eq!(f.presents[0].borrow().len(), before + 6);
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Star → RoundedRect
         assert_eq!(f.presents[0].borrow().len(), before + 7);
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Rectangle → off
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
         assert_eq!(f.presents[0].borrow().len(), before + 8);
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Rectangle → off
+        assert_eq!(f.presents[0].borrow().len(), before + 9);
     }
 
     #[test]
@@ -2632,33 +2640,36 @@ mod tests {
         // Pressing the spotlight key through the shapes rebuilds the legend
         // (the legend tab text names the shape) and the final press unveils.
         let mut f = freeze_fake_with(big_monitor(), Point::new(400, 100));
-        let legend_circle =
-            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
-        let legend_diamond =
-            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Diamond);
-        let legend_rounded =
-            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::RoundedRect);
-        let legend_rectangle =
-            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Rectangle);
 
         // S: Circle → Diamond — legend should now show Diamond.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
-        assert!(
-            with_state(&f, |s| s.legend.size() == legend_diamond.size()),
+        assert_eq!(
+            with_state(&f, |s| s.legend.shape()),
+            Some(SpotlightShape::Diamond),
             "legend updated to Diamond"
         );
 
-        // S: Diamond → RoundedRect — legend should now show RoundedRect.
+        // S: Diamond → Star — legend should now show Star.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
-        assert!(
-            with_state(&f, |s| s.legend.size() == legend_rounded.size()),
+        assert_eq!(
+            with_state(&f, |s| s.legend.shape()),
+            Some(SpotlightShape::Star),
+            "legend updated to Star"
+        );
+
+        // S: Star → RoundedRect — legend should now show RoundedRect.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert_eq!(
+            with_state(&f, |s| s.legend.shape()),
+            Some(SpotlightShape::RoundedRect),
             "legend updated to RoundedRect"
         );
 
         // S: RoundedRect → Rectangle — legend should now show Rectangle.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
-        assert!(
-            with_state(&f, |s| s.legend.size() == legend_rectangle.size()),
+        assert_eq!(
+            with_state(&f, |s| s.legend.shape()),
+            Some(SpotlightShape::Rectangle),
             "legend updated to Rectangle"
         );
 
@@ -2671,8 +2682,9 @@ mod tests {
 
         // S: off → on at Circle — legend back to Circle.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
-        assert!(
-            with_state(&f, |s| s.legend.size() == legend_circle.size()),
+        assert_eq!(
+            with_state(&f, |s| s.legend.shape()),
+            Some(SpotlightShape::Circle),
             "legend back to Circle on reactivation"
         );
     }

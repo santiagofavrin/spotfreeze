@@ -4,7 +4,7 @@
 //! with this layer's [`SpotlightMode::cursor`]/[`SpotlightMode::radius`] via
 //! [`crate::overlay::modes::ModeStack::render_state`].
 //!
-//! The spotlight key `S` cycles the shape (Circle → Diamond → RoundedRect → Rectangle)
+//! The spotlight key `S` cycles the shape (Circle → Diamond → Star → RoundedRect → Rectangle)
 //! and then turns the layer off on the last shape — see
 //! [`is_last_shape`](SpotlightMode::is_last_shape) and
 //! [`cycle_shape`](SpotlightMode::cycle_shape).
@@ -127,13 +127,13 @@ impl SpotlightMode {
         self.cursor_monitor
     }
 
-    /// Spotlight shape (circle, diamond, or rounded_rect).
+    /// Spotlight shape (circle, diamond, star, rounded_rect, or rectangle).
     pub fn shape(&self) -> SpotlightShape {
         self.shape
     }
 
     /// `true` when the current shape is the LAST entry in
-    /// [`SpotlightShape::ALL`] (i.e. `RoundedRect`). The stack uses this to
+    /// [`SpotlightShape::ALL`] (i.e. `Rectangle`). The stack uses this to
     /// decide whether the spotlight key should advance the shape or turn the
     /// layer off.
     pub fn is_last_shape(&self) -> bool {
@@ -247,6 +247,7 @@ mod tests {
     fn is_last_shape_true_for_rectangle() {
         assert!(SpotlightMode::new(100, SpotlightShape::Rectangle).is_last_shape());
         assert!(!SpotlightMode::new(100, SpotlightShape::RoundedRect).is_last_shape());
+        assert!(!SpotlightMode::new(100, SpotlightShape::Star).is_last_shape());
         assert!(!SpotlightMode::new(100, SpotlightShape::Circle).is_last_shape());
         assert!(!SpotlightMode::new(100, SpotlightShape::Diamond).is_last_shape());
     }
@@ -257,6 +258,8 @@ mod tests {
         assert_eq!(m.shape(), SpotlightShape::Circle);
         m.cycle_shape();
         assert_eq!(m.shape(), SpotlightShape::Diamond);
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::Star);
         m.cycle_shape();
         assert_eq!(m.shape(), SpotlightShape::RoundedRect);
         m.cycle_shape();

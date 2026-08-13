@@ -324,6 +324,7 @@ impl WaylandTray {
     /// version line, then the callbacks fire in menu order: "Spotlight",
     /// "Screenshot", "Edit settings", "Open settings folder", "Reload
     /// settings", "Exit".
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn<F, G, H, I, J, K, L>(
         tooltip: &str,
         on_spotlight: F,

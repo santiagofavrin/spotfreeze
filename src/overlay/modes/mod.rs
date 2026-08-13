@@ -8,8 +8,8 @@
 //!
 //! - **Spotlight toggle (`S`) → [`ModeStack::toggle_mode`]**: the layer is
 //!   added when inactive (fresh state at the settings default shape). When
-//!   active, pressing `S` advances the shape (Circle → Diamond → RoundedRect → Rectangle);
-//!   pressing `S` on the LAST shape (`RoundedRect`) REMOVES the layer.
+//!   active, pressing `S` advances the shape (Circle → Diamond → Star → RoundedRect → Rectangle);
+//!   pressing `S` on the LAST shape (`Rectangle`) REMOVES the layer.
 //!   Toggling the last layer off leaves the screen frozen but UNVEILED
 //!   ([`ModeStack::any_active`] is false — the controller dims nothing).
 //!   Spotlight is the default mode: freeze starts with the layer on.
@@ -252,7 +252,7 @@ impl ModeStack {
     /// shape). When active and the current shape is NOT the last in
     /// [`SpotlightShape::ALL`], advance to the next shape (radius, cursor, and
     /// wheel accumulator are preserved). When active and the current shape IS
-    /// the last (`RoundedRect`), REMOVE the layer — the screen stays frozen
+    /// the last (`Rectangle`), REMOVE the layer — the screen stays frozen
     /// but unveiled when no other layer is active. Toggling the zoom layer
     /// banks its factor as the last-used level; re-activating restores it.
     /// `Snip` toggles capture mode: ON enters via
@@ -534,7 +534,7 @@ mod tests {
     }
 
     /// Toggle the spotlight layer off, cycling through all shapes if needed.
-    /// The spotlight key `S` now cycles Circle → Diamond → RoundedRect → Rectangle → off,
+    /// The spotlight key `S` now cycles Circle → Diamond → Star → RoundedRect → Rectangle → off,
     /// so a single `toggle_mode(ModeKind::Spotlight)` may only advance the
     /// shape instead of turning the layer off. This helper calls toggle_mode
     /// until the spotlight layer is gone.
@@ -696,7 +696,7 @@ mod tests {
 
     #[test]
     fn spotlight_cycles_circle_diamond_rounded_rect_then_off() {
-        // Full sequence: Circle → Diamond → RoundedRect → Rectangle → off → on again at
+        // Full sequence: Circle → Diamond → Star → RoundedRect → Rectangle → off → on again at
         // the settings default shape (Circle).
         let mut stack = ModeStack::new(params());
         assert_eq!(
@@ -710,7 +710,12 @@ mod tests {
         assert!(stack.is_active(ModeKind::Spotlight));
         assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Diamond);
 
-        // S: Diamond → RoundedRect
+        // S: Diamond → Star
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(stack.is_active(ModeKind::Spotlight));
+        assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Star);
+
+        // S: Star → RoundedRect
         stack.toggle_mode(ModeKind::Spotlight);
         assert!(stack.is_active(ModeKind::Spotlight));
         assert_eq!(
@@ -760,7 +765,14 @@ mod tests {
             "cursor preserved"
         );
 
-        stack.toggle_mode(ModeKind::Spotlight); // Diamond → RoundedRect
+        stack.toggle_mode(ModeKind::Spotlight); // Diamond → Star
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Star
+        );
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "radius preserved");
+
+        stack.toggle_mode(ModeKind::Spotlight); // Star → RoundedRect
         assert_eq!(
             stack.spotlight().unwrap().shape(),
             SpotlightShape::RoundedRect
@@ -782,10 +794,12 @@ mod tests {
         assert!(stack.any_active());
         stack.toggle_mode(ModeKind::Spotlight); // Circle → Diamond
         assert!(stack.any_active(), "still active after first advance");
-        stack.toggle_mode(ModeKind::Spotlight); // Diamond → RoundedRect
+        stack.toggle_mode(ModeKind::Spotlight); // Diamond → Star
         assert!(stack.any_active(), "still active after second advance");
-        stack.toggle_mode(ModeKind::Spotlight); // RoundedRect → Rectangle
+        stack.toggle_mode(ModeKind::Spotlight); // Star → RoundedRect
         assert!(stack.any_active(), "still active after third advance");
+        stack.toggle_mode(ModeKind::Spotlight); // RoundedRect → Rectangle
+        assert!(stack.any_active(), "still active after fourth advance");
         stack.toggle_mode(ModeKind::Spotlight); // Rectangle → off
         assert!(!stack.any_active(), "off after last shape");
     }
@@ -805,7 +819,14 @@ mod tests {
             "starts at Diamond"
         );
 
-        // S: Diamond → RoundedRect
+        // S: Diamond → Star
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Star
+        );
+
+        // S: Star → RoundedRect
         stack.toggle_mode(ModeKind::Spotlight);
         assert_eq!(
             stack.spotlight().unwrap().shape(),

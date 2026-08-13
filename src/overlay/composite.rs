@@ -65,6 +65,7 @@ pub fn spotlight_hole(
         SpotlightShape::Diamond => {
             spotlight_hole_diamond(dst_darkened, src_original, center, radius)
         }
+        SpotlightShape::Star => spotlight_hole_star(dst_darkened, src_original, center, radius),
         SpotlightShape::RoundedRect => {
             spotlight_hole_rounded_rect(dst_darkened, src_original, center, radius)
         }
@@ -175,6 +176,71 @@ fn spotlight_hole_diamond(
         }
         // Horizontal half-span at this row: |dx| <= r - |dy|.
         let dx_max = r - dy;
+        let x0 = (cx - dx_max).max(0);
+        let x1 = (cx + dx_max).min(w - 1);
+        if x0 > x1 {
+            continue;
+        }
+        let len = ((x1 - x0 + 1) * 4) as usize;
+        let di = y as usize * dstride + x0 as usize * 4;
+        let si = y as usize * sstride + x0 as usize * 4;
+        dst_darkened.pixels[di..di + len].copy_from_slice(&src_original.pixels[si..si + len]);
+    }
+}
+
+/// Restore the ORIGINAL image inside a regular 6-pointed star (hexagram):
+/// the UNION of two equilateral triangles inscribed in the circle of `radius`.
+///
+/// Up triangle vertices (relative to center): `(0, -r)`, `(r*√3/2, r/2)`,
+/// `(-r*√3/2, r/2)`. Down triangle vertices: `(0, r)`, `(r*√3/2, -r/2)`,
+/// `(-r*√3/2, -r/2)`. The union is simply connected — most rows produce one
+/// contiguous span. Half-width at relative `dy = |y - cy|`:
+///
+/// - `|dy| > r`: no intersection
+/// - `|dy| > r/2`: `half_width = √3/3 * (r - |dy|)`
+/// - `|dy| <= r/2`: `half_width = √3/3 * (r + |dy|)`
+///
+/// Same buffer contract as [`spotlight_hole_circle`].
+fn spotlight_hole_star(
+    dst_darkened: &mut DibBuffer,
+    src_original: &DibBuffer,
+    center: Point,
+    radius: u32,
+) {
+    debug_assert_eq!(dst_darkened.width, src_original.width);
+    debug_assert_eq!(dst_darkened.height, src_original.height);
+    debug_assert_eq!(dst_darkened.stride, src_original.stride);
+    let w = dst_darkened.width.min(src_original.width) as i64;
+    let h = dst_darkened.height.min(src_original.height) as i64;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+
+    let cx = center.x as i64;
+    let cy = center.y as i64;
+    let r = radius as i64;
+
+    // Vertical span the star can touch, clipped to the buffer.
+    let y0 = (cy - r).max(0);
+    let y1 = (cy + r).min(h - 1);
+    if y0 > y1 {
+        return;
+    }
+
+    let dstride = dst_darkened.stride as usize;
+    let sstride = src_original.stride as usize;
+
+    for y in y0..=y1 {
+        let dy = (y - cy).unsigned_abs() as i64;
+        if dy > r {
+            continue;
+        }
+        // Half-width of the hexagram at this row: √3/3 * base, rounded.
+        // base = r + dy  when |dy| <= r/2 (both triangles contribute)
+        // base = r - dy  when |dy| > r/2  (only one triangle contributes)
+        let base = if dy <= r / 2 { r + dy } else { r - dy };
+        // √3/3 ≈ 57735/100000 (accurate to 5 decimal places)
+        let dx_max = (base * 57735 + 50000) / 100000;
         let x0 = (cx - dx_max).max(0);
         let x1 = (cx + dx_max).min(w - 1);
         if x0 > x1 {
@@ -1091,7 +1157,7 @@ mod tests {
         let src = make_buf(21, 21, pattern);
         let mut dst = solid(21, 21, [5, 5, 5, 255]);
         spotlight_hole_rounded_rect(&mut dst, &src, Point::new(10, 10), 10);
-        let cr = (10 / 3).max(1) as i32;
+        let cr = 10 / 3;
         for y in 0..21i32 {
             for x in 0..21i32 {
                 let dx = (x - 10).unsigned_abs() as i32;
@@ -1168,7 +1234,7 @@ mod tests {
 
     #[test]
     fn spotlight_dispatch_all_shapes() {
-        // Verify the dispatch function works for all four shapes by checking
+        // Verify the dispatch function works for all five shapes by checking
         // that each shape's revealed pixels are a subset of the bounding box.
         let src = make_buf(15, 15, pattern);
         let center = Point::new(7, 7);
@@ -1198,6 +1264,70 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn spotlight_star_center_tip_and_notch() {
+        // 21x21 buffer, center (10,10), r=10. Verify:
+        // - center pixel is revealed
+        // - a far-corner bbox pixel stays darkened
+        // - a star tip (directly above center) is revealed
+        // - a notch pixel (inside bbox but outside both triangles) stays darkened
+        let src = make_buf(21, 21, pattern);
+        let mut dst = solid(21, 21, [10, 10, 10, 255]);
+        spotlight_hole_star(&mut dst, &src, Point::new(10, 10), 10);
+
+        // Center pixel revealed.
+        assert_eq!(
+            px(&dst, 10, 10),
+            pattern(10, 10),
+            "center pixel revealed"
+        );
+
+        // Top tip: directly above center at y = cy - r = 0.
+        assert_eq!(
+            px(&dst, 10, 0),
+            pattern(10, 0),
+            "top tip revealed"
+        );
+
+        // Bottom tip: directly below center at y = cy + r = 20.
+        assert_eq!(
+            px(&dst, 10, 20),
+            pattern(10, 20),
+            "bottom tip revealed"
+        );
+
+        // Far-corner bbox pixel: top-left (0,0) is outside both triangles.
+        assert_eq!(
+            px(&dst, 0, 0),
+            [10, 10, 10, 255],
+            "far corner stays darkened"
+        );
+
+        // Notch pixel: inside the bbox but outside the star.
+        // At dy = 6 (just above r/2 = 5), only the down triangle contributes:
+        // half-width = √3/3 * (r - dy) = √3/3 * 4 ≈ 2. Pixel (10+3, 10-6) = (13,4)
+        // has dx=3 > 2, so it's outside the star but inside the bbox (|dx|<=10).
+        assert_eq!(
+            px(&dst, 13, 4),
+            [10, 10, 10, 255],
+            "notch pixel stays darkened"
+        );
+
+        // Another notch: symmetric on the other side.
+        assert_eq!(
+            px(&dst, 7, 4),
+            [10, 10, 10, 255],
+            "notch pixel (left side) stays darkened"
+        );
+
+        // A pixel just inside the star at the same row: dx=2, dy=6, half-width≈2.
+        assert_eq!(
+            px(&dst, 12, 4),
+            pattern(12, 4),
+            "pixel just inside the star at notch row revealed"
+        );
     }
 
     // ---- zoom_resample -------------------------------------------------

@@ -1,15 +1,15 @@
-//! Scenario: the mode/hotkey legend pill.
+//! Scenario: the mode/hotkey legend HUD.
 //!
-//! While frozen, every monitor shows a modern translucent rounded pill near
-//! its top-center: the modes as TABS (active highlighted), each labelled with
-//! the hotkey that reaches it, read from the freeze-time bindings. Text is
-//! anti-aliased vector typography from the embedded Inter typeface
+//! While frozen, every monitor shows a compact HUD near its top-center: the
+//! modes as tabs (active highlighted), each labelled with the hotkey that
+//! reaches it inside a keycap, read from the freeze-time bindings.
+//! Text is anti-aliased vector typography from the embedded Inter typeface
 //! (rasterized by `fontdue`) — driven here through the public API:
 //! settings -> [`Legend::from_hotkeys`] -> painted frames.
 //!
 //! Covered: tab labels from default + custom bindings, the ZOOM tab reflecting
 //! the zoom-modifier wheel chord, per-monitor centering, translucency, the
-//! active-tab highlight, and the controller painting the pill into presented
+//! active-tab highlight, and the controller painting the HUD into presented
 //! frames while keeping it out of the clipboard (the last point is pinned
 //! end-to-end in the controller's own tests).
 
@@ -48,9 +48,9 @@ fn default_bindings_render_mode_tabs_with_their_hotkeys() {
     assert_eq!(
         legend.tab_labels(),
         vec![
-            "SPOTLIGHT (S)".to_string(),
-            "ZOOM (Shift+Wheel)".to_string(),
-            "SNIP (C)".to_string(),
+            "Spotlight [S]".to_string(),
+            "Zoom [Shift+Wheel]".to_string(),
+            "Capture [C]".to_string(),
         ]
     );
     assert_eq!(
@@ -60,7 +60,7 @@ fn default_bindings_render_mode_tabs_with_their_hotkeys() {
     );
     let (w, h) = legend.size();
     assert!(w > 200, "pill width is sizable: {w}");
-    assert!(h > 0, "pill has a positive height");
+    assert_eq!(h, 32, "pill has exactly 32 pixels height");
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn custom_zoom_modifier_changes_the_zoom_tab_label_and_pill_width() {
     let legend = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle);
     assert_eq!(
         legend.tab_labels()[1],
-        "ZOOM (Ctrl+Alt+Shift+Win+Wheel)",
+        "Zoom [Ctrl+Alt+Shift+Win+Wheel]",
         "the zoom tab follows the configured zoom modifier"
     );
     let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle)
@@ -89,7 +89,7 @@ fn custom_zoom_modifier_changes_the_zoom_tab_label_and_pill_width() {
 #[test]
 fn pill_is_top_centered_translucent_and_highlights_the_active_tab() {
     let legend = Legend::new(&[LegendTab {
-        name: "SPOTLIGHT".into(),
+        name: "Spotlight".into(),
         hotkey: "S".into(),
     }]);
     let (pw, ph) = legend.size();
@@ -105,7 +105,7 @@ fn pill_is_top_centered_translucent_and_highlights_the_active_tab() {
 
     let x0 = origin.x as u32;
     let y0 = origin.y as u32;
-    // The pill is painted in the top-center band and is translucent: the pill
+    // The HUD is painted in the top-center band and is translucent: the HUD
     // center is dimmer than the plain frame (blended toward near-black) but
     // not solid black.
     let center = inactive.pixel(x0 + pw / 2, y0 + ph / 2).unwrap();
@@ -127,11 +127,11 @@ fn pill_is_top_centered_translucent_and_highlights_the_active_tab() {
         inactive.pixel(frame_w - 1, frame_h - 1).unwrap(),
         plain.pixel(frame_w - 1, frame_h - 1).unwrap()
     );
-    // The active tab's chip area is brighter overall than the inactive one
-    // (chip fill + brighter text).
-    let chip_w = pw - 2 * 20; // pill padding on each side; one tab fills the inner width
-    let on_sum = region_sum(&active, x0 + 20, y0, chip_w, ph);
-    let off_sum = region_sum(&inactive, x0 + 20, y0, chip_w, ph);
+    // The active tab's area is brighter overall than the inactive one
+    // (active keycap fill + brighter text).
+    let chip_w = pw - 2 * 12 - 25 - 32; // inner chips width
+    let on_sum = region_sum(&active, x0 + 12, y0, chip_w, ph);
+    let off_sum = region_sum(&inactive, x0 + 12, y0, chip_w, ph);
     assert!(
         on_sum > off_sum,
         "active tab highlighted: on={on_sum} off={off_sum}"
@@ -163,7 +163,7 @@ fn controller_paints_the_pill_centered_on_every_monitor() {
         // The pill sits near THIS monitor's top-center (each frame is
         // monitor-local): probe the pill band only.
         let x0 = (1024 - pw) / 2;
-        let y0 = 48;
+        let y0 = 24; // new TOP_MARGIN
         let pill_pixel = frame.pixel(x0 + pw / 2, y0 + ph / 2).unwrap();
         // Reference: the same monitor's composed frame without the pill.
         let mut bare = DibBuffer::new(1024, 160);
