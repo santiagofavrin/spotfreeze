@@ -1,6 +1,6 @@
 [package]
 name = "spotfreeze"
-version = "1.21.3"
+version = "1.22.0"
 edition = "2024"
 
 [dependencies]
