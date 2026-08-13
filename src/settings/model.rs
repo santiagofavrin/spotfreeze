@@ -4,7 +4,7 @@
 //! `#[serde(default)]`, so any missing key in the settings file falls back to
 //! the default value: old config files stay valid when new keys are added.
 //!
-//! Hotkeys are stored as their display strings (`"Win+F"`, `"Esc"`) via
+//! Hotkeys are stored as their display strings (`"Alt+Backtick"`, `"Esc"`) via
 //! the serde impls on [`HotkeyGesture`] / [`Modifiers`]. The overlay veil
 //! color is stored as a `"#RRGGBB"` hex string via [`Rgb`]'s serde impls.
 
@@ -117,7 +117,7 @@ impl std::error::Error for ParseRgbError {}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HotkeySettings {
-    /// GLOBAL hotkey: toggle screen freeze. Default: `Win+F`.
+    /// GLOBAL hotkey: toggle screen freeze. Default: `Alt+Backtick`.
     pub freeze_toggle: HotkeyGesture,
     /// While frozen: toggle the spotlight layer on/off — when active, cycles
     /// the shape (Circle → Diamond → RoundedRect → Rectangle) then turns off on the last
@@ -145,7 +145,7 @@ pub struct HotkeySettings {
 impl Default for HotkeySettings {
     fn default() -> Self {
         Self {
-            freeze_toggle: HotkeyGesture::parse("Win+F").unwrap(),
+            freeze_toggle: HotkeyGesture::parse("Alt+Backtick").unwrap(),
             mode_spotlight: HotkeyGesture::parse("S").unwrap(),
             mode_snip: HotkeyGesture::parse("C").unwrap(),
             zoom_modifier: Modifiers::SHIFT,
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn hotkey_defaults_are_the_new_out_of_box_experience() {
         let d = HotkeySettings::default();
-        assert_eq!(d.freeze_toggle, gesture("Win+F"));
+        assert_eq!(d.freeze_toggle, gesture("Alt+Backtick"));
         assert_eq!(d.mode_spotlight, gesture("S"));
         assert_eq!(d.mode_snip, gesture("C"));
         assert_eq!(d.zoom_modifier, Modifiers::SHIFT);
@@ -263,12 +263,12 @@ mod tests {
     }
 
     #[test]
-    fn freeze_toggle_default_is_win_plus_f() {
+    fn freeze_toggle_default_is_alt_plus_backtick() {
         let d = HotkeySettings::default().freeze_toggle;
-        // Pinned explicitly: WIN modifier bit + vk of 'F'.
-        assert_eq!(d.modifiers, Modifiers::WIN);
-        assert_eq!(d.vk, 'F' as u32);
-        assert_eq!(d.to_display(), "Win+F");
+        // Pinned explicitly: ALT modifier bit + VK_OEM_3 (backtick).
+        assert_eq!(d.modifiers, Modifiers::ALT);
+        assert_eq!(d.vk, 0xC0);
+        assert_eq!(d.to_display(), "Alt+Backtick");
     }
 
     #[test]

@@ -14,8 +14,8 @@ re-composited from reusable buffers — never a full repaint from scratch.
 
 ## Features
 
-- **Freeze the screen** with a customizable global hotkey (`Win+F` out of the
-  box, including full support for `Win`+key combos). All monitors are captured
+- **Freeze the screen** with a customizable global hotkey (`Alt+Backtick` out of
+  the box, including full support for `Win`+key combos). All monitors are captured
   at once; each monitor gets its own darkened overlay, so multi-monitor setups
   are fully covered.
 - **Spotlight toggle** — a bright circle follows your cursor over the dimmed
@@ -42,7 +42,7 @@ re-composited from reusable buffers — never a full repaint from scratch.
 - **Every hotkey is rebindable**, with conflict validation. On Windows the
   built-in settings window captures whatever you press — including `Win`+key
   combinations; on Linux/macOS you edit the binding strings in `spotfreeze.jsonc`
-  (same gesture syntax, e.g. `Win+F` or `Ctrl+Alt+F`).
+  (same gesture syntax, e.g. `Alt+Backtick` or `Win+F`).
 - **Tray-based** — no window until you ask for one. Click the tray icon with
   either mouse button for the menu: *Spotlight* and *Screenshot* (one-click
   activation), *Reload Settings*, *Settings…*, and *Exit*.
@@ -80,7 +80,7 @@ screen is frozen.
 
 | Action | Default | Scope |
 | --- | --- | --- |
-| Toggle screen freeze | `Win+F` | Global — works from any app (in capture mode it backs out of capture first, like `Esc`) |
+| Toggle screen freeze | `Alt+Backtick` | Global — works from any app (in capture mode it backs out of capture first, like `Esc`) |
 | Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
@@ -254,7 +254,7 @@ Example `spotfreeze.jsonc` (excerpt):
 ```jsonc
 {
   "hotkeys": {
-    "freeze_toggle": "Win+F",
+    "freeze_toggle": "Alt+Backtick",
     "mode_spotlight": "S",
     "mode_snip": "C",
     // Modifier held + wheel to zoom from ANY mode (default: "Shift").

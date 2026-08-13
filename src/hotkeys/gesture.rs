@@ -43,6 +43,7 @@ pub(crate) const NAMED_KEYS: &[(&str, u32)] = &[
     ("OemMinus", 0xBD),    // VK_OEM_MINUS
     ("OemComma", 0xBC),    // VK_OEM_COMMA
     ("OemPeriod", 0xBE),   // VK_OEM_PERIOD
+    ("Backtick", 0xC0),    // VK_OEM_3 (`~` key)
 ];
 
 /// Win32 virtual-key codes of the modifier keys themselves (both the generic
@@ -545,6 +546,7 @@ mod tests {
             ("OemMinus", 0xBD),
             ("OemComma", 0xBC),
             ("OemPeriod", 0xBE),
+            ("Backtick", 0xC0),
         ];
         for (name, vk) in cases {
             let g = HotkeyGesture::parse(name).unwrap();

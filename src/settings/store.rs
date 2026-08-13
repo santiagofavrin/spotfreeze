@@ -463,7 +463,7 @@ mod tests {
             "color appears as hex with its default: {template}"
         );
         assert!(
-            template.contains("\"freeze_toggle\": \"Win+F\""),
+            template.contains("\"freeze_toggle\": \"Alt+Backtick\""),
             "new freeze hotkey default: {template}"
         );
         for (key, value) in [("mode_spotlight", "S"), ("mode_snip", "C")] {

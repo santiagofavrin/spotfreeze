@@ -1,7 +1,7 @@
 //! Scenario (b): hotkey defaults — REWORK pins (mode-redesign update).
 //!
 //! New out-of-box defaults (user feedback):
-//! - `freeze_toggle` = **Win+F** (was Ctrl+Alt+F)
+//! - `freeze_toggle` = **Alt+Backtick** (was Win+F)
 //! - `mode_spotlight` = **S**, `mode_snip` = **C** (were 1/2/3) — `C` now
 //!   enters CAPTURE mode (snip renamed in the docs)
 //! - `zoom_modifier` = **Shift** (wheel-zoom chord, modifier-only) — zoom is
@@ -38,8 +38,8 @@ fn documented_default_gestures_are_exact() {
     let h = HotkeySettings::default();
     assert_eq!(
         h.freeze_toggle,
-        HotkeyGesture::new(Modifiers::WIN, 'F' as u32),
-        "freeze_toggle = Win+F"
+        HotkeyGesture::new(Modifiers::ALT, 0xC0),
+        "freeze_toggle = Alt+Backtick"
     );
     assert_eq!(
         h.mode_spotlight,
@@ -64,7 +64,7 @@ fn documented_default_gestures_are_exact() {
 fn default_display_strings_match_docs() {
     let h = HotkeySettings::default();
     let expected = [
-        "Win+F",  // freeze_toggle
+        "Alt+Backtick", // freeze_toggle
         "S",      // mode_spotlight
         "C",      // mode_snip
         "Ctrl+C", // snip_copy

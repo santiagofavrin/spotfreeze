@@ -65,6 +65,7 @@ const KEYSYM_NAMES: &[(u32, &str)] = &[
     (0x002D, "minus"),
     (0x002C, "comma"),
     (0x002E, "period"),
+    (0x0060, "grave"),
 ];
 
 /// X keysym name of a Win32 virtual-key code (via [`keymap::vk_to_xkb`]);
@@ -393,6 +394,7 @@ mod tests {
     #[test]
     fn default_bindings_map_to_portal_triggers() {
         assert_eq!(trigger("Win+F"), "<Super>f");
+        assert_eq!(trigger("Alt+Backtick"), "<Alt>grave");
         assert_eq!(trigger("Ctrl+Alt+Q"), "<Control><Alt>q");
         assert_eq!(trigger("S"), "s");
         assert_eq!(trigger("0"), "0");
@@ -435,6 +437,7 @@ mod tests {
             ("OemMinus", "minus"),
             ("OemComma", "comma"),
             ("OemPeriod", "period"),
+            ("Backtick", "grave"),
         ];
         for (name, want) in cases {
             assert_eq!(&trigger(name), want, "trigger of {name}");

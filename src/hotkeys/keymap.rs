@@ -429,6 +429,11 @@ const KEY_MAP: &[KeyMapEntry] = &[
         xkb: 0x002E,
         cg: Some(0x2F),
     }, // OemPeriod (XK_period; CG ANSI Period)
+    KeyMapEntry {
+        vk: 0xC0,
+        xkb: 0x0060,
+        cg: Some(0x32),
+    }, // Backtick (XK_grave; CG ANSI Grave)
 ];
 
 /// xkb keysym for a Win32 virtual-key code; `None` outside the vocabulary.
@@ -542,10 +547,12 @@ mod tests {
         assert_eq!(vk_to_xkb(0x1B), Some(0xFF1B)); // VK_ESCAPE -> XK_Escape
         assert_eq!(vk_to_xkb(0x70), Some(0xFFBE)); // VK_F1 -> XK_F1
         assert_eq!(vk_to_xkb(0x2E), Some(0xFFFF)); // VK_DELETE -> XK_Delete
+        assert_eq!(vk_to_xkb(0xC0), Some(0x0060)); // VK_OEM_3 -> XK_grave
         // HIToolbox Events.h.
         assert_eq!(vk_to_cg_keycode(0x41), Some(0x00)); // 'A' -> kVK_ANSI_A
         assert_eq!(vk_to_cg_keycode(0x0D), Some(0x24)); // VK_RETURN -> kVK_Return
         assert_eq!(vk_to_cg_keycode(0x20), Some(0x31)); // VK_SPACE -> kVK_Space
+        assert_eq!(vk_to_cg_keycode(0xC0), Some(0x32)); // VK_OEM_3 -> kVK_ANSI_Grave
         assert_eq!(cg_keycode_to_vk(0x7A), Some(0x70)); // kVK_F1 -> VK_F1
     }
 
