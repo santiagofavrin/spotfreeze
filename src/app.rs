@@ -110,7 +110,7 @@ enum UpdateOutcome {
 /// 5. **Global hotkeys** (re-registered after every settings save):
 ///    * `freeze_toggle` (always active) → freeze/unfreeze;
 ///    * while frozen only: `mode_spotlight` → `OverlayController::toggle_mode`
-///      (spotlight on/off), `mode_snip` → `OverlayController::set_mode`
+///      (spotlight cycles shapes, then turns off on the last shape), `mode_snip` → `OverlayController::set_mode`
 ///      (enter capture mode, re-basing the freeze), plus `cancel` → unfreeze
 ///      (in capture mode: exit capture back to the pre-capture view),
 ///      `snip_copy` → `OverlayController::snip_copy_and_close`, `reset_zoom`
@@ -487,7 +487,6 @@ fn on_hotkey(state: &mut AppState, hwnd: HWND, wparam: WPARAM) {
         }
         FrozenAction::Cancel => state.controller.unfreeze(),
         FrozenAction::ResetZoom => reset_zoom(state),
-        FrozenAction::CycleSpotlightShape => state.controller.cycle_spotlight_shape(),
     }
     // The controller may have unfrozen itself (snip copy, or a mode asking to
     // exit): drop the frozen-mode hotkeys in that case.

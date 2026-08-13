@@ -94,21 +94,54 @@ fn freeze_entry_presents_the_settled_frame_once_and_seamless() {
 #[test]
 fn spotlight_toggle_repaints_once_both_ways_without_flashing() {
     let mut f = freeze(Point::new(16, 16));
-    // Off: one settled repaint, session stays frozen.
+    // Cycle through all shapes: Circle → Diamond → RoundedRect → Rectangle → off.
+    // Each press repaints exactly once.
     let before = f.presents[0].borrow().len();
+
+    // S: Circle → Diamond (veil stays)
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    assert_eq!(
+        f.presents[0].borrow().len(),
+        before + 1,
+        "first shape advance: one repaint"
+    );
+    assert_ne!(
+        f.last_present(0).pixels,
+        original0().pixels,
+        "the veil is still on after shape advance"
+    );
+
+    // S: Diamond → RoundedRect (veil stays)
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    assert_eq!(
+        f.presents[0].borrow().len(),
+        before + 2,
+        "second shape advance: one repaint"
+    );
+
+    // S: RoundedRect → Rectangle (veil stays)
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    assert_eq!(
+        f.presents[0].borrow().len(),
+        before + 3,
+        "third shape advance: one repaint"
+    );
+
+    // S: Rectangle → off (unveiled original)
     f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
     assert!(f.controller.is_frozen());
     assert_eq!(
         f.presents[0].borrow().len(),
-        before + 1,
-        "toggle-off: one settled repaint, no flash frames"
+        before + 4,
+        "toggle-off: four total repaints for full cycle"
     );
     assert_eq!(
         f.last_present(0).pixels,
         original0().pixels,
         "toggle-off ends exactly on the unveiled original"
     );
-    // On: one settled repaint.
+
+    // S: off → Circle (one settled repaint, veil back)
     let before = f.presents[0].borrow().len();
     f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
     assert_eq!(f.controller.active_mode(), ModeKind::Spotlight);
@@ -172,7 +205,12 @@ fn capture_entry_and_esc_exit_repaint_once_without_flashing() {
 #[test]
 fn the_whole_key_driven_journey_is_flash_free() {
     let mut f = freeze(Point::new(16, 16));
+    // Cycle spotlight off: Circle → Diamond → RoundedRect → Rectangle → off
     f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+    // Back on at Circle
     f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
     // Zoom in via the implicit Shift+wheel chord, then dismiss it with the
     // `0`-key path (reset_view).

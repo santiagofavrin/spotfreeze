@@ -120,11 +120,18 @@ pub enum SpotlightShape {
     Diamond,
     /// A square with rounded corners; corner radius = `radius / 3`.
     RoundedRect,
+    /// A plain square with sharp corners (no rounding).
+    Rectangle,
 }
 
 impl SpotlightShape {
     /// All defined shapes, for iteration/validation.
-    pub const ALL: &'static [Self] = &[Self::Circle, Self::Diamond, Self::RoundedRect];
+    pub const ALL: &'static [Self] = &[
+        Self::Circle,
+        Self::Diamond,
+        Self::RoundedRect,
+        Self::Rectangle,
+    ];
 }
 
 impl std::fmt::Display for SpotlightShape {
@@ -133,6 +140,7 @@ impl std::fmt::Display for SpotlightShape {
             Self::Circle => write!(f, "circle"),
             Self::Diamond => write!(f, "diamond"),
             Self::RoundedRect => write!(f, "rounded_rect"),
+            Self::Rectangle => write!(f, "rectangle"),
         }
     }
 }
@@ -144,8 +152,9 @@ impl std::str::FromStr for SpotlightShape {
             "circle" => Ok(Self::Circle),
             "diamond" => Ok(Self::Diamond),
             "rounded_rect" => Ok(Self::RoundedRect),
+            "rectangle" => Ok(Self::Rectangle),
             _ => Err(format!(
-                "unknown spotlight shape: {s:?} (expected circle, diamond, or rounded_rect)"
+                "unknown spotlight shape: {s:?} (expected circle, diamond, rounded_rect, or rectangle)"
             )),
         }
     }
@@ -366,8 +375,14 @@ mod tests {
     #[test]
     fn spotlight_shape_parse_unknown_returns_err() {
         let err = "bogus".parse::<SpotlightShape>().unwrap_err();
-        assert!(err.contains("bogus"), "error message includes the bad input: {err}");
-        assert!(err.contains("circle"), "error message lists valid options: {err}");
+        assert!(
+            err.contains("bogus"),
+            "error message includes the bad input: {err}"
+        );
+        assert!(
+            err.contains("circle"),
+            "error message lists valid options: {err}"
+        );
     }
 
     #[test]
@@ -397,10 +412,11 @@ mod tests {
     }
 
     #[test]
-    fn spotlight_shape_all_contains_three_variants() {
-        assert_eq!(SpotlightShape::ALL.len(), 3);
+    fn spotlight_shape_all_contains_four_variants() {
+        assert_eq!(SpotlightShape::ALL.len(), 4);
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::Circle));
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::Diamond));
         assert!(SpotlightShape::ALL.contains(&SpotlightShape::RoundedRect));
+        assert!(SpotlightShape::ALL.contains(&SpotlightShape::Rectangle));
     }
 }

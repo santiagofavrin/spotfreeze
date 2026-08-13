@@ -139,7 +139,6 @@ impl AppState {
             }
             Some(FrozenAction::Cancel) => self.controller.unfreeze(),
             Some(FrozenAction::ResetZoom) => self.controller.reset_view(),
-            Some(FrozenAction::CycleSpotlightShape) => self.controller.cycle_spotlight_shape(),
             None => {}
         }
     }

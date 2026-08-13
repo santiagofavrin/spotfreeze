@@ -29,6 +29,7 @@ const OLD_SCHEMA_FULL: &str = r#"{
     "mode_snip": "3",
     // modifier-only binding: key HELD while scrolling the wheel to resize the circle (not a full hotkey)
     "spotlight_radius_modifier": "Ctrl",
+    "cycle_spotlight_shape": "Q",
     "snip_copy": "Ctrl+C",
     "cancel": "Esc",
     "reset_zoom": "0"

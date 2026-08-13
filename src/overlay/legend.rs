@@ -167,6 +167,7 @@ impl Legend {
             SpotlightShape::Circle => "SPOTLIGHT".to_string(),
             SpotlightShape::Diamond => "SPOTLIGHT ◇".to_string(),
             SpotlightShape::RoundedRect => "SPOTLIGHT ▭".to_string(),
+            SpotlightShape::Rectangle => "SPOTLIGHT □".to_string(),
         };
         Self::build(
             &[
@@ -612,6 +613,23 @@ mod tests {
         assert!(long > short, "longer text is wider: {long} vs {short}");
     }
 
+    #[test]
+    fn rectangle_unicode_glyph_rasterizes_to_non_empty_coverage() {
+        // The Rectangle tab uses the White Square (U+25A1) glyph. Verify it
+        // rasterizes to non-empty coverage with the embedded Inter font, so
+        // the legend never shows a tofu/empty box.
+        let font = load_font(FONT_REGULAR_BYTES);
+        let cb = rasterize_string(&font, "□", FONT_PX);
+        assert!(
+            cb.width > 0 && cb.height > 0,
+            "non-empty glyph bitmap for □"
+        );
+        assert!(
+            cb.coverage.iter().any(|&c| c > 0),
+            "the □ glyph has covered pixels (anti-aliased)"
+        );
+    }
+
     // ---- from_hotkeys data contract -----------------------------------------
 
     #[test]
@@ -659,12 +677,16 @@ mod tests {
     #[test]
     fn a_longer_binding_widens_the_pill() {
         let mut hotkeys = HotkeySettings::default();
-        let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle).size().0;
+        let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle)
+            .size()
+            .0;
         hotkeys.zoom_modifier = crate::hotkeys::gesture::Modifiers::CTRL
             | crate::hotkeys::gesture::Modifiers::ALT
             | crate::hotkeys::gesture::Modifiers::SHIFT
             | crate::hotkeys::gesture::Modifiers::WIN;
-        let wider = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle).size().0;
+        let wider = Legend::from_hotkeys(&hotkeys, SpotlightShape::Circle)
+            .size()
+            .0;
         assert!(
             wider > default_w,
             "a longer zoom-modifier chord widens the pill: {wider} vs {default_w}"

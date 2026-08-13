@@ -119,7 +119,9 @@ impl std::error::Error for ParseRgbError {}
 pub struct HotkeySettings {
     /// GLOBAL hotkey: toggle screen freeze. Default: `Win+F`.
     pub freeze_toggle: HotkeyGesture,
-    /// While frozen: toggle the spotlight layer on/off. Default: `S`.
+    /// While frozen: toggle the spotlight layer on/off — when active, cycles
+    /// the shape (Circle → Diamond → RoundedRect → Rectangle) then turns off on the last
+    /// shape. Default: `S`.
     pub mode_spotlight: HotkeyGesture,
     /// While frozen: switch to Capture mode (re-freezes the current view with
     /// the active spotlight/zoom effects baked in). Default: `C`.
@@ -129,9 +131,6 @@ pub struct HotkeySettings {
     /// a modifier-only binding (e.g. bare `Shift`), not a full gesture.
     /// Default: `Shift`.
     pub zoom_modifier: Modifiers,
-    /// While frozen: cycle the spotlight shape (Circle → Diamond → RoundedRect
-    /// → Circle). Default: `Q`.
-    pub cycle_spotlight_shape: HotkeyGesture,
     /// Capture mode: copy the selection (or the focused monitor's full frame when
     /// no selection exists) to the clipboard, then close the overlay.
     /// Default: `Ctrl+C`.
@@ -150,7 +149,6 @@ impl Default for HotkeySettings {
             mode_spotlight: HotkeyGesture::parse("S").unwrap(),
             mode_snip: HotkeyGesture::parse("C").unwrap(),
             zoom_modifier: Modifiers::SHIFT,
-            cycle_spotlight_shape: HotkeyGesture::parse("Q").unwrap(),
             snip_copy: HotkeyGesture::parse("Ctrl+C").unwrap(),
             cancel: HotkeyGesture::parse("Esc").unwrap(),
             reset_zoom: HotkeyGesture::parse("0").unwrap(),
@@ -164,7 +162,8 @@ pub struct SpotlightSettings {
     /// Spotlight circle radius at freeze time, in physical pixels of the
     /// monitor under the cursor. Default: 150.
     pub default_radius: u32,
-    /// Spotlight shape: "circle" (default), "diamond", or "rounded_rect".
+    /// Spotlight shape: "circle" (default), "diamond", "rounded_rect", or
+    /// "rectangle".
     pub shape: SpotlightShape,
 }
 
@@ -258,7 +257,6 @@ mod tests {
         assert_eq!(d.mode_spotlight, gesture("S"));
         assert_eq!(d.mode_snip, gesture("C"));
         assert_eq!(d.zoom_modifier, Modifiers::SHIFT);
-        assert_eq!(d.cycle_spotlight_shape, gesture("Q"));
         assert_eq!(d.snip_copy, gesture("Ctrl+C"));
         assert_eq!(d.cancel, gesture("Esc"));
         assert_eq!(d.reset_zoom, gesture("0"));

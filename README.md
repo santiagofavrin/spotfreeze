@@ -81,7 +81,7 @@ screen is frozen.
 | Action | Default | Scope |
 | --- | --- | --- |
 | Toggle screen freeze | `Win+F` | Global — works from any app (in capture mode it backs out of capture first, like `Esc`) |
-| Spotlight toggle | `S` | While frozen — off = screen stays frozen but CLEAR (no dim), on = spotlight back immediately |
+| Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
 | Resize spotlight circle | Mouse wheel | While spotlight is active |
@@ -106,9 +106,12 @@ the first frame) and disappears the moment you unfreeze.
 
 Spotlight and zoom are **layers**; capture is the only real mode switch:
 
-- **`S` (Spotlight) — toggle.** Turns the spotlight layer on and off without
-  touching the zoom layer. With every layer off, the screen stays frozen (all
-  input still captured) but the overlay is completely clear — no dim at all.
+- **`S` (Spotlight) — cycle & toggle.** Cycles the spotlight shape (Circle →
+  Diamond → RoundedRect → Rectangle) then turns it off on the last shape. With
+  every layer off, the screen stays frozen (all input still captured) but the
+  overlay is completely clear — no dim at all. Pressing `S` again brings the
+  spotlight back at the starting shape (`spotlight.shape` setting, default
+  `"circle"`).
 - **Zoom — implicit layer.** There is no zoom hotkey: `Shift`+wheel zooms
   from anywhere, on top of spotlight on or off. The layer appears the moment
   you zoom in, and drops itself when you zoom back out to 1.0× (no
@@ -261,6 +264,11 @@ Example `spotfreeze.jsonc` (excerpt):
   "overlay": {
     "dim_opacity": 160,     // 0 = invisible veil, 255 = solid
     "color": "#000000",     // veil color as #RRGGBB (default: black)
+  },
+  // Spotlight shape: "circle" (default), "diamond", "rounded_rect", "rectangle".
+  "spotlight": {
+    "default_radius": 150,  // physical pixels
+    "shape": "circle",
   },
   // Launch at login — Windows/macOS only (default: false).
   "auto_start": false,

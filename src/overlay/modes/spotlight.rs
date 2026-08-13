@@ -3,6 +3,11 @@
 //! [`crate::overlay::composite::compose_frame`], which the controller feeds
 //! with this layer's [`SpotlightMode::cursor`]/[`SpotlightMode::radius`] via
 //! [`crate::overlay::modes::ModeStack::render_state`].
+//!
+//! The spotlight key `S` cycles the shape (Circle → Diamond → RoundedRect → Rectangle)
+//! and then turns the layer off on the last shape — see
+//! [`is_last_shape`](SpotlightMode::is_last_shape) and
+//! [`cycle_shape`](SpotlightMode::cycle_shape).
 
 use super::ModeEffect;
 use crate::geometry::{Point, Rect, SpotlightShape};
@@ -116,7 +121,18 @@ impl SpotlightMode {
         self.shape
     }
 
+    /// `true` when the current shape is the LAST entry in
+    /// [`SpotlightShape::ALL`] (i.e. `RoundedRect`). The stack uses this to
+    /// decide whether the spotlight key should advance the shape or turn the
+    /// layer off.
+    pub fn is_last_shape(&self) -> bool {
+        self.shape as usize == SpotlightShape::ALL.len() - 1
+    }
+
     /// Cycle to the next shape in `SpotlightShape::ALL`, wrapping around.
+    /// The stack guards the wrap with [`is_last_shape`](Self::is_last_shape)
+    /// so the spotlight key turns the layer off instead of wrapping back to
+    /// Circle.
     /// Returns a `ModeEffect` that repaints the current hole region (the
     /// bounding box is the same for all shapes, so only the old region needs
     /// repainting — the new shape draws into the same bbox).
@@ -125,7 +141,10 @@ impl SpotlightMode {
         let next = (current + 1) % SpotlightShape::ALL.len();
         self.shape = SpotlightShape::ALL[next];
         // Repaint the current hole region — the bbox is the same for all shapes.
-        ModeEffect::repaint(self.cursor_monitor, Some(circle_bbox(self.cursor, self.radius)))
+        ModeEffect::repaint(
+            self.cursor_monitor,
+            Some(circle_bbox(self.cursor, self.radius)),
+        )
     }
 
     /// Tracks the cursor; requests a repaint of the hole's old + new regions.
@@ -185,9 +204,18 @@ mod tests {
 
     #[test]
     fn new_clamps_default_radius() {
-        assert_eq!(SpotlightMode::new(5, SpotlightShape::Circle).radius(), MIN_RADIUS);
-        assert_eq!(SpotlightMode::new(5000, SpotlightShape::Circle).radius(), MAX_RADIUS);
-        assert_eq!(SpotlightMode::new(100, SpotlightShape::Circle).radius(), 100);
+        assert_eq!(
+            SpotlightMode::new(5, SpotlightShape::Circle).radius(),
+            MIN_RADIUS
+        );
+        assert_eq!(
+            SpotlightMode::new(5000, SpotlightShape::Circle).radius(),
+            MAX_RADIUS
+        );
+        assert_eq!(
+            SpotlightMode::new(100, SpotlightShape::Circle).radius(),
+            100
+        );
     }
 
     #[test]
@@ -195,6 +223,46 @@ mod tests {
         let m = SpotlightMode::new(100, SpotlightShape::Circle);
         assert_eq!(m.cursor(), Point::new(0, 0));
         assert_eq!(m.cursor_monitor(), 0);
+    }
+
+    // ---- shape cycling ------------------------------------------------------
+
+    #[test]
+    fn is_last_shape_true_for_rectangle() {
+        assert!(SpotlightMode::new(100, SpotlightShape::Rectangle).is_last_shape());
+        assert!(!SpotlightMode::new(100, SpotlightShape::RoundedRect).is_last_shape());
+        assert!(!SpotlightMode::new(100, SpotlightShape::Circle).is_last_shape());
+        assert!(!SpotlightMode::new(100, SpotlightShape::Diamond).is_last_shape());
+    }
+
+    #[test]
+    fn cycle_shape_advances_and_wraps() {
+        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
+        assert_eq!(m.shape(), SpotlightShape::Circle);
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::Diamond);
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::RoundedRect);
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::Rectangle);
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::Circle, "wraps around");
+    }
+
+    #[test]
+    fn cycle_shape_preserves_radius_and_cursor() {
+        let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
+        m.on_mouse_move(1, Point::new(100, 200));
+        m.on_wheel(1, Point::new(100, 200), 120); // radius 40
+        assert_eq!(m.radius(), 40);
+        assert_eq!(m.cursor(), Point::new(100, 200));
+        assert_eq!(m.cursor_monitor(), 1);
+
+        m.cycle_shape();
+        assert_eq!(m.shape(), SpotlightShape::Diamond);
+        assert_eq!(m.radius(), 40, "radius preserved");
+        assert_eq!(m.cursor(), Point::new(100, 200), "cursor preserved");
+        assert_eq!(m.cursor_monitor(), 1, "monitor preserved");
     }
 
     // ---- mouse move ------------------------------------------------------

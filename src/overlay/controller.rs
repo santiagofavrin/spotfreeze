@@ -6,14 +6,14 @@
 //!
 //! Implementation notes (contract clarifications — public API kept):
 //! - **Default mode**: `freeze` enters Spotlight (product spec default).
-//! - **Mode model**: Spotlight is a TOGGLE (`S`: layer on/off — with every
-//!   layer off the screen stays frozen but UNVEILED); zoom is an IMPLICIT
-//!   effect LAYER driven only by the zoom-modifier wheel chord (default
-//!   Shift+wheel) — activated on zoom-in, auto-dismissed back at the 1.0
-//!   baseline, and dropped outright by the reset-view hotkey; Capture (`C`)
-//!   RE-BASES the freeze (see below). Every key-driven mode change is
-//!   SEAMLESS: no flash frames, no border rings. Spotlight toggles and full
-//!   mode switches repaint once, instantly.
+//! - **Mode model**: Spotlight cycles shapes (Circle → Diamond → RoundedRect → Rectangle)
+//!   then turns off on the last shape — with every layer off the screen stays
+//!   frozen but UNVEILED. Zoom is an IMPLICIT effect LAYER driven only by the
+//!   zoom-modifier wheel chord (default Shift+wheel) — activated on zoom-in,
+//!   auto-dismissed back at the 1.0 baseline, and dropped outright by the
+//!   reset-view hotkey. Capture (`C`) RE-BASES the freeze (see below). Every
+//!   key-driven mode change is SEAMLESS: no flash frames, no border rings.
+//!   Spotlight toggles and full mode switches repaint once, instantly.
 //! - **No transitions**: freeze and unfreeze are INSTANT. Freeze presents
 //!   each monitor's settled frame once — veil at full strength, spotlight
 //!   circle at its settled radius, legend at full strength; unfreeze simply
@@ -389,10 +389,13 @@ impl OverlayController {
         self.active = kind;
     }
 
-    /// TOGGLE key (spotlight's `S`): remove the layer when active (with no
-    /// layers left the screen stays frozen but the overlay is UNVEILED), add
-    /// it otherwise — the spotlight fresh, the zoom layer at the last-used
-    /// factor. `Snip` toggles capture mode: ON re-bases the freeze like
+    /// TOGGLE key (spotlight's `S`): when the spotlight layer is inactive,
+    /// activate it with fresh state (radius, default shape). When active and
+    /// the current shape is NOT the last, advance to the next shape AND
+    /// rebuild the legend (the legend tab text names the shape). When active
+    /// and the current shape IS the last (`RoundedRect`), remove the layer —
+    /// the screen stays frozen but unveiled when no other layer is active.
+    /// `Snip` toggles capture mode: ON re-bases the freeze like
     /// [`set_mode`](Self::set_mode), OFF exits capture, restoring the
     /// pre-capture originals and the stashed layers. Every toggle repaints
     /// once, instantly. No-op when not frozen.
@@ -414,11 +417,25 @@ impl OverlayController {
         match (kind, activating) {
             (ModeKind::Spotlight, true) => {
                 state.modes.toggle_mode(kind);
+                state.legend =
+                    Legend::from_hotkeys(&state.settings.hotkeys, state.modes.spotlight_shape());
                 seed_cursor(state, services);
                 self.active = kind;
             }
             (ModeKind::Spotlight, false) => {
+                // Snapshot the shape before the toggle (which may advance or
+                // remove the layer), then rebuild the legend if the layer is
+                // still active and the shape changed.
+                let old_shape = state.modes.spotlight_shape();
                 state.modes.toggle_mode(kind);
+                if state.modes.is_active(ModeKind::Spotlight)
+                    && state.modes.spotlight_shape() != old_shape
+                {
+                    state.legend = Legend::from_hotkeys(
+                        &state.settings.hotkeys,
+                        state.modes.spotlight_shape(),
+                    );
+                }
             }
             _ => {
                 state.modes.toggle_mode(kind);
@@ -464,25 +481,6 @@ impl OverlayController {
         let effect = state.modes.reset_view();
         for &(m, dirty) in &effect.repaint {
             render_and_present(state, m, dirty);
-        }
-    }
-
-    /// Cycle the spotlight shape to the next variant and rebuild the legend.
-    pub fn cycle_spotlight_shape(&self) {
-        let mut slot = self.inner.borrow_mut();
-        let state = slot.as_mut();
-        if let Some(state) = state {
-            let effect = state.modes.cycle_spotlight_shape();
-            if !effect.repaint.is_empty() {
-                // Rebuild the legend with the new shape.
-                state.legend = Legend::from_hotkeys(
-                    &state.settings.hotkeys,
-                    state.modes.spotlight_shape(),
-                );
-                for &(monitor, dirty) in &effect.repaint {
-                    render_and_present(state, monitor, dirty);
-                }
-            }
         }
     }
 
@@ -1745,6 +1743,23 @@ mod tests {
 
     // ---- frozen sessions: Esc routing, capture re-freeze, effected copies ----
 
+    /// Toggle the spotlight layer off, cycling through all shapes if needed.
+    /// The spotlight key `S` now cycles Circle → Diamond → RoundedRect → Rectangle → off,
+    /// so a single `toggle_mode(ModeKind::Spotlight)` may only advance the
+    /// shape instead of turning the layer off. This helper calls toggle_mode
+    /// until the spotlight layer is gone.
+    fn spotlight_off(f: &mut FakeFreeze) {
+        while f.controller.is_frozen()
+            && f.controller
+                .inner
+                .borrow()
+                .as_ref()
+                .is_some_and(|s| s.modes.is_active(ModeKind::Spotlight))
+        {
+            f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        }
+    }
+
     #[test]
     fn esc_in_spotlight_mode_fully_unfreezes() {
         let mut f = freeze_fake(Point::new(16, 16));
@@ -1755,7 +1770,7 @@ mod tests {
     #[test]
     fn esc_in_spotlight_off_fully_unfreezes() {
         let mut f = freeze_fake(Point::new(16, 16));
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // spotlight off
+        spotlight_off(&mut f); // spotlight off
         assert!(f.controller.is_frozen());
         f.controller.unfreeze();
         assert!(!f.controller.is_frozen());
@@ -1952,7 +1967,7 @@ mod tests {
     #[test]
     fn esc_in_capture_restores_spotlight_off_state() {
         let mut f = freeze_fake(Point::new(16, 16));
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // off: unveiled
+        spotlight_off(&mut f); // off: unveiled
         let unveiled = last_present(&f.presents[0]);
         assert_eq!(unveiled.pixels, make_buf(32, 32, coord_pattern).pixels);
 
@@ -2188,10 +2203,31 @@ mod tests {
     fn spotlight_toggle_off_repaints_once_to_the_unveiled_endpoint() {
         let mut f = freeze_fake(Point::new(16, 16));
         let before = f.presents[0].borrow().len();
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        // Cycle through all shapes: Circle → Diamond → RoundedRect → Rectangle → off.
+        // Each press repaints exactly once.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Circle → Diamond
+        assert!(f.controller.is_frozen());
+        assert_eq!(
+            f.presents[0].borrow().len(),
+            before + 1,
+            "first shape advance: one repaint"
+        );
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → RoundedRect
+        assert_eq!(
+            f.presents[0].borrow().len(),
+            before + 2,
+            "second shape advance: one repaint"
+        );
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
+        assert_eq!(
+            f.presents[0].borrow().len(),
+            before + 3,
+            "third shape advance: one repaint"
+        );
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Rectangle → off
         assert!(f.controller.is_frozen(), "toggling off stays frozen");
         let p = f.presents[0].borrow();
-        assert_eq!(p.len(), before + 1, "one immediate settled repaint");
+        assert_eq!(p.len(), before + 4, "four total repaints for full cycle");
         assert_eq!(
             p.last().unwrap().pixels,
             make_buf(32, 32, coord_pattern).pixels
@@ -2201,7 +2237,7 @@ mod tests {
     #[test]
     fn spotlight_toggle_on_repaints_once_to_the_settled_endpoint() {
         let mut f = freeze_fake(Point::new(16, 16));
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // off
+        spotlight_off(&mut f); // off
         let before = f.presents[0].borrow().len();
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // on again
         assert_eq!(f.controller.active_mode(), ModeKind::Spotlight);
@@ -2223,9 +2259,13 @@ mod tests {
             },
         );
         let before = f.presents[0].borrow().len();
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        // Cycle spotlight off (Circle → Diamond → RoundedRect → Rectangle → off).
+        // With zoom active, the veil stays after spotlight is removed.
+        spotlight_off(&mut f);
         let p = f.presents[0].borrow();
-        assert_eq!(p.len(), before + 1, "one immediate settled repaint");
+        // Four repaints for the cycle (one per shape advance + off), plus the
+        // zoom layer keeps the veil.
+        assert_eq!(p.len(), before + 4, "four repaints for full cycle");
         // The zoom layer keeps the veil at full strength after the spotlight
         // hole disappears.
         let original = make_buf(32, 32, coord_pattern);
@@ -2257,9 +2297,15 @@ mod tests {
         assert_eq!(f.presents[0].borrow().len(), before + 3);
         f.controller.set_mode(ModeKind::Spotlight, &f.services);
         assert_eq!(f.presents[0].borrow().len(), before + 4);
-        // Spotlight toggle: one repaint, like every in-session toggle.
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        // Spotlight toggle: cycling through all shapes repaints once per press.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Circle → Diamond
         assert_eq!(f.presents[0].borrow().len(), before + 5);
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Diamond → RoundedRect
+        assert_eq!(f.presents[0].borrow().len(), before + 6);
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // RoundedRect → Rectangle
+        assert_eq!(f.presents[0].borrow().len(), before + 7);
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // Rectangle → off
+        assert_eq!(f.presents[0].borrow().len(), before + 8);
     }
 
     #[test]
@@ -2267,8 +2313,8 @@ mod tests {
         // The whole key-driven journey; every recorded frame must be
         // flash-free.
         let mut f = freeze_fake(Point::new(16, 16));
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
-        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        spotlight_off(&mut f); // cycle off
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services); // on again
         f.controller.set_mode(ModeKind::Snip, &f.services);
         f.controller.unfreeze(); // exit capture
         f.controller.set_mode(ModeKind::Snip, &f.services);
@@ -2578,6 +2624,56 @@ mod tests {
             with_state(&f, |s| s.legend_pos[0]),
             dragged_pos,
             "legend position survives capture entry/exit"
+        );
+    }
+
+    #[test]
+    fn spotlight_shape_cycle_rebuilds_the_legend() {
+        // Pressing the spotlight key through the shapes rebuilds the legend
+        // (the legend tab text names the shape) and the final press unveils.
+        let mut f = freeze_fake_with(big_monitor(), Point::new(400, 100));
+        let legend_circle =
+            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Circle);
+        let legend_diamond =
+            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Diamond);
+        let legend_rounded =
+            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::RoundedRect);
+        let legend_rectangle =
+            Legend::from_hotkeys(&AppSettings::default().hotkeys, SpotlightShape::Rectangle);
+
+        // S: Circle → Diamond — legend should now show Diamond.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert!(
+            with_state(&f, |s| s.legend.size() == legend_diamond.size()),
+            "legend updated to Diamond"
+        );
+
+        // S: Diamond → RoundedRect — legend should now show RoundedRect.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert!(
+            with_state(&f, |s| s.legend.size() == legend_rounded.size()),
+            "legend updated to RoundedRect"
+        );
+
+        // S: RoundedRect → Rectangle — legend should now show Rectangle.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert!(
+            with_state(&f, |s| s.legend.size() == legend_rectangle.size()),
+            "legend updated to Rectangle"
+        );
+
+        // S: Rectangle → off — spotlight off, screen unveiled.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert!(
+            !with_state(&f, |s| s.modes.is_active(ModeKind::Spotlight)),
+            "spotlight off after last shape"
+        );
+
+        // S: off → on at Circle — legend back to Circle.
+        f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
+        assert!(
+            with_state(&f, |s| s.legend.size() == legend_circle.size()),
+            "legend back to Circle on reactivation"
         );
     }
 }

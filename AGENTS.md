@@ -74,8 +74,11 @@ a platform shell (OS-specific)? Pure logic in the core, OS glue in the shell.
 
 ## Mode model (don't break these)
 
-- **Spotlight** (`S`) is a **toggle**: layer on/off; with every layer off the
-  screen stays frozen but completely clear (no dim).
+- **Spotlight** (`S`) cycles the spotlight shape (Circle → Diamond → RoundedRect
+  → Rectangle → off) and turns the layer off on the last shape; with every layer
+  off the screen stays frozen but completely clear (no dim). Pressing `S` again
+  brings the spotlight back at the starting shape (`spotlight.shape` setting,
+  default Circle).
 - **Zoom** is an **implicit layer** with no hotkey of its own: the
   zoom-modifier wheel chord (default `Shift`+wheel) zooms from any mode,
   stacking over spotlight on/off. The layer appears on zoom-in and

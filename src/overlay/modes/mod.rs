@@ -7,10 +7,12 @@
 //! # Mode model (product spec)
 //!
 //! - **Spotlight toggle (`S`) → [`ModeStack::toggle_mode`]**: the layer is
-//!   added when inactive, REMOVED when active. Toggling the last layer off
-//!   leaves the screen frozen but UNVEILED ([`ModeStack::any_active`] is
-//!   false — the controller dims nothing). Spotlight is the default mode:
-//!   freeze starts with the layer on.
+//!   added when inactive (fresh state at the settings default shape). When
+//!   active, pressing `S` advances the shape (Circle → Diamond → RoundedRect → Rectangle);
+//!   pressing `S` on the LAST shape (`RoundedRect`) REMOVES the layer.
+//!   Toggling the last layer off leaves the screen frozen but UNVEILED
+//!   ([`ModeStack::any_active`] is false — the controller dims nothing).
+//!   Spotlight is the default mode: freeze starts with the layer on.
 //! - **Capture (`C`) → [`ModeStack::set_mode`]`(ModeKind::Snip)` →
 //!   [`ModeStack::enter_capture`]**: the controller RE-BASES the freeze on the
 //!   currently composited view (the spotlight/zoom effects active at that
@@ -165,7 +167,10 @@ impl ModeStack {
     /// spec) and the last-used zoom factor starts at 1.0.
     pub fn new(params: ModeParams) -> Self {
         Self {
-            spotlight: Some(SpotlightMode::new(params.spotlight_radius, params.spotlight_shape)),
+            spotlight: Some(SpotlightMode::new(
+                params.spotlight_radius,
+                params.spotlight_shape,
+            )),
             zoom: None,
             snip: None,
             last_zoom: 1.0,
@@ -242,20 +247,31 @@ impl ModeStack {
         self.activate(kind);
     }
 
-    /// TOGGLE key (spotlight's `S`): remove `kind`'s layer when active, add
-    /// it when not. Removing the zoom layer banks its factor as the last-used
-    /// level; re-activating restores it. Toggling the last spotlight layer
-    /// off leaves the screen frozen but unveiled; toggling it back on
-    /// re-activates with fresh state (radius back to default). `Snip` toggles
-    /// capture mode: ON enters via [`ModeStack::enter_capture`], OFF exits
-    /// via [`ModeStack::exit_capture`] (the stashed layers come back).
+    /// TOGGLE key (spotlight's `S`): when the spotlight layer is inactive,
+    /// activate it with fresh state (radius back to default, settings default
+    /// shape). When active and the current shape is NOT the last in
+    /// [`SpotlightShape::ALL`], advance to the next shape (radius, cursor, and
+    /// wheel accumulator are preserved). When active and the current shape IS
+    /// the last (`RoundedRect`), REMOVE the layer — the screen stays frozen
+    /// but unveiled when no other layer is active. Toggling the zoom layer
+    /// banks its factor as the last-used level; re-activating restores it.
+    /// `Snip` toggles capture mode: ON enters via
+    /// [`ModeStack::enter_capture`], OFF exits via
+    /// [`ModeStack::exit_capture`] (the stashed layers come back).
     ///
     /// `ModeKind::Zoom` is not reachable from any hotkey (zoom is the
     /// implicit wheel chord); the arm remains for completeness and tests.
     pub fn toggle_mode(&mut self, kind: ModeKind) {
         if self.is_active(kind) {
             match kind {
-                ModeKind::Spotlight => self.spotlight = None,
+                ModeKind::Spotlight => {
+                    // Active: advance shape or turn off.
+                    if self.spotlight.as_ref().is_some_and(|s| s.is_last_shape()) {
+                        self.spotlight = None;
+                    } else if let Some(s) = self.spotlight.as_mut() {
+                        let _ = s.cycle_shape();
+                    }
+                }
                 ModeKind::Zoom => {
                     if let Some(zoom) = self.zoom.take() {
                         self.last_zoom = zoom.zoom();
@@ -274,7 +290,10 @@ impl ModeStack {
     fn activate(&mut self, kind: ModeKind) {
         match kind {
             ModeKind::Spotlight => {
-                self.spotlight = Some(SpotlightMode::new(self.params.spotlight_radius, self.params.spotlight_shape));
+                self.spotlight = Some(SpotlightMode::new(
+                    self.params.spotlight_radius,
+                    self.params.spotlight_shape,
+                ));
             }
             ModeKind::Zoom => {
                 self.zoom = Some(ZoomMode::with_zoom(
@@ -438,15 +457,6 @@ impl ModeStack {
         self.snip.as_ref().and_then(SnipMode::snip_selection)
     }
 
-    /// Cycle the spotlight layer's shape to the next variant.
-    /// Returns `ModeEffect::none()` when the spotlight layer is inactive.
-    pub fn cycle_spotlight_shape(&mut self) -> ModeEffect {
-        match &mut self.spotlight {
-            Some(s) => s.cycle_shape(),
-            None => ModeEffect::none(),
-        }
-    }
-
     /// Current spotlight shape, or `SpotlightShape::Circle` if spotlight is off.
     pub fn spotlight_shape(&self) -> SpotlightShape {
         self.spotlight
@@ -521,6 +531,17 @@ mod tests {
             (z - expected).abs() < 1e-6,
             "zoom {z} vs expected {expected}"
         );
+    }
+
+    /// Toggle the spotlight layer off, cycling through all shapes if needed.
+    /// The spotlight key `S` now cycles Circle → Diamond → RoundedRect → Rectangle → off,
+    /// so a single `toggle_mode(ModeKind::Spotlight)` may only advance the
+    /// shape instead of turning the layer off. This helper calls toggle_mode
+    /// until the spotlight layer is gone.
+    fn spotlight_off(stack: &mut ModeStack) {
+        while stack.is_active(ModeKind::Spotlight) {
+            stack.toggle_mode(ModeKind::Spotlight);
+        }
     }
 
     // ---- ModeEffect ------------------------------------------------------
@@ -654,7 +675,7 @@ mod tests {
     fn toggle_off_removes_the_layer_and_leaves_nothing_active() {
         let mut stack = ModeStack::new(params());
         assert!(stack.any_active());
-        stack.toggle_mode(ModeKind::Spotlight);
+        spotlight_off(&mut stack);
         assert!(!stack.is_active(ModeKind::Spotlight));
         assert!(!stack.any_active(), "no layers left: frozen but unveiled");
     }
@@ -663,13 +684,151 @@ mod tests {
     fn toggle_on_reactivates_spotlight_with_fresh_state() {
         let mut stack = ModeStack::new(params());
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
-        stack.toggle_mode(ModeKind::Spotlight);
+        spotlight_off(&mut stack);
         stack.toggle_mode(ModeKind::Spotlight);
         assert!(stack.is_active(ModeKind::Spotlight));
         assert_eq!(
             stack.spotlight().unwrap().radius(),
             100,
             "fresh default state"
+        );
+    }
+
+    #[test]
+    fn spotlight_cycles_circle_diamond_rounded_rect_then_off() {
+        // Full sequence: Circle → Diamond → RoundedRect → Rectangle → off → on again at
+        // the settings default shape (Circle).
+        let mut stack = ModeStack::new(params());
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Circle,
+            "starts at Circle"
+        );
+
+        // S: Circle → Diamond
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(stack.is_active(ModeKind::Spotlight));
+        assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Diamond);
+
+        // S: Diamond → RoundedRect
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(stack.is_active(ModeKind::Spotlight));
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::RoundedRect
+        );
+
+        // S: RoundedRect → Rectangle
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(stack.is_active(ModeKind::Spotlight));
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Rectangle
+        );
+
+        // S: Rectangle → off
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(!stack.is_active(ModeKind::Spotlight));
+        assert!(!stack.any_active(), "no layers left");
+
+        // S: off → on at Circle (fresh state)
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(stack.is_active(ModeKind::Spotlight));
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Circle,
+            "reactivates at the settings default shape"
+        );
+    }
+
+    #[test]
+    fn spotlight_cycle_preserves_radius_and_cursor() {
+        // Resize via plain wheel + mouse move first, then cycle — assert
+        // radius and cursor unchanged and only the shape advanced.
+        let mut stack = ModeStack::new(params());
+        stack.on_mouse_move(0, pt(100, 200));
+        stack.on_wheel(0, pt(100, 200), 120, Modifiers::NONE); // radius 90
+        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().cursor(), pt(100, 200));
+
+        stack.toggle_mode(ModeKind::Spotlight); // Circle → Diamond
+        assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Diamond);
+        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+        assert_eq!(
+            stack.spotlight().unwrap().cursor(),
+            pt(100, 200),
+            "cursor preserved"
+        );
+
+        stack.toggle_mode(ModeKind::Spotlight); // Diamond → RoundedRect
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::RoundedRect
+        );
+        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+
+        stack.toggle_mode(ModeKind::Spotlight); // RoundedRect → Rectangle
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Rectangle
+        );
+        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+    }
+
+    #[test]
+    fn spotlight_cycle_keeps_layer_active() {
+        // Each shape-advance press keeps the layer active.
+        let mut stack = ModeStack::new(params());
+        assert!(stack.any_active());
+        stack.toggle_mode(ModeKind::Spotlight); // Circle → Diamond
+        assert!(stack.any_active(), "still active after first advance");
+        stack.toggle_mode(ModeKind::Spotlight); // Diamond → RoundedRect
+        assert!(stack.any_active(), "still active after second advance");
+        stack.toggle_mode(ModeKind::Spotlight); // RoundedRect → Rectangle
+        assert!(stack.any_active(), "still active after third advance");
+        stack.toggle_mode(ModeKind::Spotlight); // Rectangle → off
+        assert!(!stack.any_active(), "off after last shape");
+    }
+
+    #[test]
+    fn spotlight_activation_respects_non_default_shape() {
+        // With a non-default ModeParams::spotlight_shape (Diamond), activation
+        // starts at Diamond and S from Rectangle turns off.
+        let p = ModeParams {
+            spotlight_shape: SpotlightShape::Diamond,
+            ..params()
+        };
+        let mut stack = ModeStack::new(p);
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Diamond,
+            "starts at Diamond"
+        );
+
+        // S: Diamond → RoundedRect
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::RoundedRect
+        );
+
+        // S: RoundedRect → Rectangle
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Rectangle
+        );
+
+        // S: Rectangle → off
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert!(!stack.is_active(ModeKind::Spotlight));
+
+        // S: off → on at Diamond (settings default)
+        stack.toggle_mode(ModeKind::Spotlight);
+        assert_eq!(
+            stack.spotlight().unwrap().shape(),
+            SpotlightShape::Diamond,
+            "reactivates at the settings default shape"
         );
     }
 
@@ -707,7 +866,7 @@ mod tests {
     #[test]
     fn plain_wheel_is_inert_with_no_layers_active() {
         let mut stack = ModeStack::new(params());
-        stack.toggle_mode(ModeKind::Spotlight);
+        spotlight_off(&mut stack);
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE);
         assert_eq!(e, ModeEffect::none(), "no zoom layer active");
         assert!(!stack.is_active(ModeKind::Zoom));
@@ -799,7 +958,7 @@ mod tests {
         // the PLAIN wheel still never zooms — zoom is exclusively the
         // zoom-modifier chord.
         let mut stack = ModeStack::new(params());
-        stack.toggle_mode(ModeKind::Spotlight); // spotlight off
+        spotlight_off(&mut stack); // spotlight off
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // implicit zoom 1.25
         assert_zoom_near(&stack, 1.25);
 
@@ -844,7 +1003,7 @@ mod tests {
     #[test]
     fn wheel_zoom_active_unbound_chord_does_nothing() {
         let mut stack = ModeStack::new(params());
-        stack.toggle_mode(ModeKind::Spotlight); // spotlight off
+        spotlight_off(&mut stack); // spotlight off
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // implicit zoom 1.25
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::CTRL);
         assert_eq!(e, ModeEffect::none(), "Ctrl matches no route");
@@ -1033,7 +1192,7 @@ mod tests {
     #[test]
     fn exit_capture_restores_spotlight_off_state() {
         let mut stack = ModeStack::new(params());
-        stack.toggle_mode(ModeKind::Spotlight); // spotlight OFF
+        spotlight_off(&mut stack); // spotlight OFF
         stack.set_mode(ModeKind::Snip);
         stack.exit_capture();
         assert!(!stack.is_active(ModeKind::Spotlight), "stays off");
@@ -1113,7 +1272,10 @@ mod tests {
         let mut stack = ModeStack::new(params());
         stack.seed_cursor(0, pt(30, 40));
         let rs = stack.render_state(0);
-        assert_eq!(rs.spotlight, Some((pt(30, 40), 100, SpotlightShape::Circle)));
+        assert_eq!(
+            rs.spotlight,
+            Some((pt(30, 40), 100, SpotlightShape::Circle))
+        );
         assert_eq!(rs.zoom, None);
         assert_eq!(rs.snip, None);
         assert!(!rs.capture);

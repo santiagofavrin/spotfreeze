@@ -76,7 +76,9 @@ fn custom_zoom_modifier_changes_the_zoom_tab_label_and_pill_width() {
         "ZOOM (Ctrl+Alt+Shift+Win+Wheel)",
         "the zoom tab follows the configured zoom modifier"
     );
-    let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle).size().0;
+    let default_w = Legend::from_hotkeys(&HotkeySettings::default(), SpotlightShape::Circle)
+        .size()
+        .0;
     let wider = legend.size().0;
     assert!(
         wider > default_w,

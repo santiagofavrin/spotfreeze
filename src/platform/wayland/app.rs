@@ -229,7 +229,6 @@ impl AppState {
             }
             FrozenAction::Cancel => self.controller.unfreeze(),
             FrozenAction::ResetZoom => self.controller.reset_view(),
-            FrozenAction::CycleSpotlightShape => self.controller.cycle_spotlight_shape(),
         }
         // The controller may have unfrozen itself (copy, or a mode asking to
         // exit): the plan goes stale with the session.

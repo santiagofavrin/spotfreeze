@@ -265,8 +265,11 @@ fn render_state_carries_zoom_only_on_the_cursor_monitor() {
     let _ = stack.on_mouse_move(0, cursor);
     // The zoom chord implicitly activates the layer and zooms in one notch.
     let _ = stack.on_wheel(0, cursor, NOTCH, Modifiers::SHIFT);
-    // Spotlight off, leaving zoom the only layer (the render-path focus here).
-    stack.toggle_mode(ModeKind::Spotlight);
+    // Spotlight off (toggle until off, since S now cycles shapes), leaving
+    // zoom the only layer (the render-path focus here).
+    while stack.is_active(ModeKind::Spotlight) {
+        stack.toggle_mode(ModeKind::Spotlight);
+    }
     let zoom = stack.zoom().expect("zoom layer active").zoom();
     assert!((zoom - 1.25).abs() < 1e-6);
 
@@ -305,7 +308,10 @@ fn render_state_zoom_modifier_wheel_zooms_when_layer_active() {
     assert_eq!(rs.zoom, Some((zoom, Point::new(8, 8))));
     // Spotlight is still active too (implicit activation is additive): the
     // hole follows the same cursor.
-    assert_eq!(rs.spotlight, Some((Point::new(8, 8), 150, SpotlightShape::Circle)));
+    assert_eq!(
+        rs.spotlight,
+        Some((Point::new(8, 8), 150, SpotlightShape::Circle))
+    );
 }
 
 /// Small namespace so the uniform-source tests read cleanly.
