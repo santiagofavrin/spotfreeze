@@ -20,7 +20,15 @@
 //!   only the dirty rows into the BACK slot's shm mapping (same tightly
 //!   packed BGRA layout as [`DibBuffer`], so `wl_shm::Format::Xrgb8888` on
 //!   little-endian needs no conversion), then `damage_buffer` + `attach` +
-//!   `commit` + connection flush.
+//!   `commit` + connection flush. INVARIANT: every attached slot holds the
+//!   COMPLETE latest frame — `damage_buffer` only claims the diff against
+//!   the previously presented frame, so a partially-written buffer shows its
+//!   stale/zero regions on compositors that import per-buffer textures
+//!   (Hyprland: black screen outside the dirty rect, "painted" back by
+//!   cursor movement). Dirty presents therefore mirror their copy into the
+//!   other slot when it is writable; a slot that misses an update goes STALE
+//!   and is healed with a full copy the next time it is picked (see
+//!   [`plan_writes`]).
 //! - **Double buffering**: a slot is writable only after the compositor's
 //!   `wl_buffer.release`. Releases arrive on a DEDICATED event queue per
 //!   surface (pumped non-blocking inside `present`/`can_present`, which also
@@ -88,9 +96,14 @@ struct ShmSlot {
 }
 
 /// Release-event state for the per-surface buffer queue: which slots the
-/// compositor has handed back.
+/// compositor has handed back, and which slots hold the latest frame.
 struct SlotState {
     free: [bool; SLOT_COUNT],
+    /// `true` while the slot's shm contents equal the last presented frame.
+    /// A slot goes stale when a present skips it (busy) or when it has never
+    /// been written; attaching a stale slot after only a dirty copy would
+    /// present zeros/stale pixels outside the dirty region.
+    current: [bool; SLOT_COUNT],
 }
 
 /// One fullscreen layer-shell overlay surface over one output.
@@ -236,6 +249,7 @@ impl LayerOverlaySurface {
             attached: None,
             slot_state: SlotState {
                 free: [true; SLOT_COUNT],
+                current: [false; SLOT_COUNT],
             },
             release_queue,
             closed,
@@ -268,8 +282,10 @@ impl LayerOverlaySurface {
 
 impl OverlaySurface for LayerOverlaySurface {
     /// Re-composite from `frame` (must match the monitor rect exactly).
-    /// `dirty: Some(rect)` copies only that monitor-local region (the
-    /// per-mouse-move fast path); `None` presents the full frame.
+    /// `dirty: Some(rect)` copies only that monitor-local region into slots
+    /// that are already current (the per-mouse-move fast path; stale slots
+    /// get a healing full copy — see [`plan_writes`]); `None` presents the
+    /// full frame.
     ///
     /// Never blocks: with no free slot the frame is DROPPED (the controller
     /// gates calls through [`can_present`](Self::can_present) and repaints
@@ -301,7 +317,30 @@ impl OverlaySurface for LayerOverlaySurface {
             return Ok(()); // both slots busy: drop this frame, never block
         };
 
-        copy_frame(self.slots[slot].mapping.as_mut_slice(), frame, region);
+        // Keep BOTH slots complete: heal the picked slot with a full copy
+        // when it missed updates, mirror the copy into the other slot when
+        // it is writable, and mark a busy other slot stale (see the module
+        // docs' invariant).
+        let writes = plan_writes(
+            region,
+            slot,
+            &self.slot_state.free,
+            &self.slot_state.current,
+        );
+        copy_frame(
+            self.slots[slot].mapping.as_mut_slice(),
+            frame,
+            writes.slot.region(),
+        );
+        if let Some(mirror) = writes.mirror {
+            copy_frame(
+                self.slots[1 - slot].mapping.as_mut_slice(),
+                frame,
+                mirror.region(),
+            );
+        }
+        self.slot_state.current = writes.current;
+
         self.wl_surface.attach(Some(&self.slots[slot].buffer), 0, 0);
         match region {
             Some(r) => self
@@ -351,6 +390,75 @@ fn pick_slot(free: &[bool; SLOT_COUNT], attached: Option<usize>) -> Option<usize
     (0..SLOT_COUNT)
         .find(|&i| free[i] && Some(i) != attached)
         .or_else(|| (0..SLOT_COUNT).find(|&i| free[i]))
+}
+
+/// One slot write planned by [`plan_writes`]: a full-frame copy or a
+/// dirty-region copy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SlotWrite {
+    Full,
+    Dirty(Rect),
+}
+
+impl SlotWrite {
+    /// The `copy_frame` region argument (`None` = full frame).
+    fn region(self) -> Option<Rect> {
+        match self {
+            SlotWrite::Full => None,
+            SlotWrite::Dirty(r) => Some(r),
+        }
+    }
+}
+
+/// The copies keeping both shm slots complete for one present.
+struct Writes {
+    /// Copy into the picked slot.
+    slot: SlotWrite,
+    /// Copy mirrored into the OTHER slot; `None` when the other slot is busy
+    /// (goes stale) or already stale (left to heal on its own next pick).
+    mirror: Option<SlotWrite>,
+    /// Resulting per-slot completeness flags.
+    current: [bool; SLOT_COUNT],
+}
+
+/// Plan one present's slot writes so every ATTACHED buffer holds the
+/// complete latest frame (the module docs' invariant): the picked slot gets
+/// a dirty copy only when it is already current (otherwise a healing full
+/// copy); the other slot gets the same copy mirrored when it is writable
+/// and the copy keeps it complete, otherwise it is marked stale. `region:
+/// None` means a full-frame present. Pure; unit-tested headless.
+fn plan_writes(
+    region: Option<Rect>,
+    slot: usize,
+    free: &[bool; SLOT_COUNT],
+    current: &[bool; SLOT_COUNT],
+) -> Writes {
+    let write = match region {
+        Some(r) if current[slot] => SlotWrite::Dirty(r),
+        _ => SlotWrite::Full,
+    };
+    let other = 1 - slot;
+    let mut next = *current;
+    next[slot] = true;
+    let mirror = if free[other] {
+        match (write, current[other]) {
+            (SlotWrite::Full, _) => {
+                next[other] = true;
+                Some(SlotWrite::Full)
+            }
+            (SlotWrite::Dirty(r), true) => Some(SlotWrite::Dirty(r)),
+            // A dirty copy cannot heal a stale slot; leave it for its pick.
+            (SlotWrite::Dirty(_), false) => None,
+        }
+    } else {
+        next[other] = false; // busy: misses this update
+        None
+    };
+    Writes {
+        slot: write,
+        mirror,
+        current: next,
+    }
 }
 
 /// Clip `dirty` (monitor-local, may be negative/oversized) to a
@@ -535,6 +643,54 @@ mod tests {
         assert_eq!(clip_dirty(Rect::new(100, 0, 10, 10), 100, 100), None);
         assert_eq!(clip_dirty(Rect::new(-20, 0, 10, 10), 100, 100), None);
         assert_eq!(clip_dirty(Rect::new(50, 0, 0, 10), 100, 100), None);
+    }
+
+    // ---- plan_writes ----
+
+    const R: Rect = Rect::new(1, 1, 4, 4);
+
+    #[test]
+    fn plan_writes_heals_a_stale_picked_slot_with_a_full_copy() {
+        let w = plan_writes(Some(R), 0, &[true, true], &[false, true]);
+        assert_eq!(w.slot, SlotWrite::Full);
+        assert_eq!(w.current[0], true);
+    }
+
+    #[test]
+    fn plan_writes_dirty_copy_only_when_the_picked_slot_is_current() {
+        let w = plan_writes(Some(R), 1, &[true, true], &[true, true]);
+        assert_eq!(w.slot, SlotWrite::Dirty(R));
+        let w = plan_writes(None, 1, &[true, true], &[true, true]);
+        assert_eq!(w.slot, SlotWrite::Full, "full present always full-copies");
+    }
+
+    #[test]
+    fn plan_writes_mirrors_dirty_into_a_free_current_other_slot() {
+        let w = plan_writes(Some(R), 0, &[true, true], &[true, true]);
+        assert_eq!(w.mirror, Some(SlotWrite::Dirty(R)));
+        assert_eq!(w.current, [true, true]);
+    }
+
+    #[test]
+    fn plan_writes_full_present_heals_a_free_stale_other_slot() {
+        let w = plan_writes(None, 0, &[true, true], &[false, false]);
+        assert_eq!(w.slot, SlotWrite::Full);
+        assert_eq!(w.mirror, Some(SlotWrite::Full));
+        assert_eq!(w.current, [true, true]);
+    }
+
+    #[test]
+    fn plan_writes_leaves_a_stale_free_other_slot_stale_on_dirty() {
+        let w = plan_writes(Some(R), 0, &[true, true], &[true, false]);
+        assert_eq!(w.mirror, None, "a dirty copy cannot heal staleness");
+        assert_eq!(w.current, [true, false]);
+    }
+
+    #[test]
+    fn plan_writes_marks_a_busy_other_slot_stale() {
+        let w = plan_writes(Some(R), 0, &[true, false], &[true, true]);
+        assert_eq!(w.mirror, None);
+        assert_eq!(w.current, [true, false], "the busy slot missed the update");
     }
 
     // ---- copy_frame ----
