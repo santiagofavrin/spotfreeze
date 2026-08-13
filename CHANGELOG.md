@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.3...v1.22.0) (2026-08-13)
+
+
+### Features
+
+* scale the spotlight wheel step with the current radius ([4769fab](https://github.com/santiagofavrin/spotfreeze/commit/4769fab0a6548fd6026d62454b0c6cb430249048))
+
 ## [1.21.3](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.2...v1.21.3) (2026-08-13)
 
 
