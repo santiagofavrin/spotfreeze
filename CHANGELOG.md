@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.23.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.22.0...v1.23.0) (2026-08-13)
+
+
+### Features
+
+* add star shape and redesign HUD ([b8baf7f](https://github.com/santiagofavrin/spotfreeze/commit/b8baf7fb3f8d0478390518526fcbfe33939fd158))
+* default freeze hotkey to Alt+Backtick ([cc97e23](https://github.com/santiagofavrin/spotfreeze/commit/cc97e23d918eed158bf1f6e1dbfc3d2c4b51ba70))
+
 ## [1.22.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.3...v1.22.0) (2026-08-13)
 
 
