@@ -4,6 +4,7 @@
 //! This keeps malformed fields and conflicting bindings testable on every
 //! platform; the modal window below is only an editor for those fields.
 
+use crate::geometry::SpotlightShape;
 use crate::hotkeys::gesture::{HotkeyGesture, Modifiers};
 use crate::settings::model::{AppSettings, Rgb};
 use objc2::rc::Retained;
@@ -36,6 +37,8 @@ struct Fields {
     snip_color: String,
     auto_start: bool,
     show_legend: bool,
+    /// Not edited by the window: carried through so a save preserves it.
+    shape: SpotlightShape,
 }
 
 fn fields_from_settings(s: &AppSettings) -> Fields {
@@ -59,6 +62,7 @@ fn fields_from_settings(s: &AppSettings) -> Fields {
         snip_color: s.overlay.snip_color.to_hex(),
         auto_start: s.auto_start,
         show_legend: s.overlay.show_legend,
+        shape: s.spotlight.shape,
     }
 }
 
@@ -161,6 +165,7 @@ fn validate_fields(f: &Fields) -> Result<AppSettings, Vec<String>> {
         hotkeys: h.clone(),
         spotlight: crate::settings::model::SpotlightSettings {
             default_radius: radius.unwrap(),
+            shape: f.shape,
         },
         zoom: crate::settings::model::ZoomSettings {
             step_factor: step.unwrap(),
