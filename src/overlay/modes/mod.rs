@@ -600,7 +600,7 @@ mod tests {
     fn set_mode_resets_all_layers_and_makes_kind_the_only_active_one() {
         let mut stack = ModeStack::new(params());
         // Dirty every layer: radius changed, zoom engaged, selection drawn.
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // implicit zoom 1.25
         stack.set_mode(ModeKind::Snip); // capture: spotlight/zoom stashed
         stack.on_left_button_down(0, pt(2, 2));
@@ -626,7 +626,7 @@ mod tests {
     fn set_mode_same_kind_still_resets_state() {
         // Spec: a plain press is a FULL SWITCH — no same-kind exemption.
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(0, 0), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(0, 0), 120, Modifiers::NONE); // radius 94
         stack.set_mode(ModeKind::Spotlight);
         assert_eq!(stack.spotlight().unwrap().radius(), 100, "radius reset");
     }
@@ -634,12 +634,12 @@ mod tests {
     #[test]
     fn add_mode_preserves_existing_layers() {
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
 
         stack.add_mode(ModeKind::Zoom);
         assert_eq!(
             stack.spotlight().unwrap().radius(),
-            90,
+            94,
             "additive activation does NOT reset the spotlight"
         );
         assert_eq!(
@@ -683,7 +683,7 @@ mod tests {
     #[test]
     fn toggle_on_reactivates_spotlight_with_fresh_state() {
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
         spotlight_off(&mut stack);
         stack.toggle_mode(ModeKind::Spotlight);
         assert!(stack.is_active(ModeKind::Spotlight));
@@ -747,13 +747,13 @@ mod tests {
         // radius and cursor unchanged and only the shape advanced.
         let mut stack = ModeStack::new(params());
         stack.on_mouse_move(0, pt(100, 200));
-        stack.on_wheel(0, pt(100, 200), 120, Modifiers::NONE); // radius 90
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        stack.on_wheel(0, pt(100, 200), 120, Modifiers::NONE); // radius 94
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
         assert_eq!(stack.spotlight().unwrap().cursor(), pt(100, 200));
 
         stack.toggle_mode(ModeKind::Spotlight); // Circle → Diamond
         assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Diamond);
-        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "radius preserved");
         assert_eq!(
             stack.spotlight().unwrap().cursor(),
             pt(100, 200),
@@ -765,14 +765,14 @@ mod tests {
             stack.spotlight().unwrap().shape(),
             SpotlightShape::RoundedRect
         );
-        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "radius preserved");
 
         stack.toggle_mode(ModeKind::Spotlight); // RoundedRect → Rectangle
         assert_eq!(
             stack.spotlight().unwrap().shape(),
             SpotlightShape::Rectangle
         );
-        assert_eq!(stack.spotlight().unwrap().radius(), 90, "radius preserved");
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "radius preserved");
     }
 
     #[test]
@@ -892,7 +892,7 @@ mod tests {
     fn wheel_spotlight_only_plain_wheel_resizes_modifier_chords_stay_inert() {
         let mut stack = ModeStack::new(params());
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE);
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
         assert!(!e.repaint.is_empty(), "resize reports a repaint");
         assert!(
             !stack.is_active(ModeKind::Zoom),
@@ -902,7 +902,7 @@ mod tests {
         // A chord that is neither plain nor the zoom modifier does nothing.
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::CTRL);
         assert_eq!(e, ModeEffect::none(), "Ctrl+wheel does not resize");
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
         assert!(!stack.is_active(ModeKind::Zoom));
     }
 
@@ -915,7 +915,7 @@ mod tests {
         // involved at this level: animations live in the controller's
         // key-driven paths.)
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90 first
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94 first
         assert!(!stack.is_active(ModeKind::Zoom), "pristine: no zoom layer");
 
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT);
@@ -927,7 +927,7 @@ mod tests {
         assert!(!e.repaint.is_empty(), "the implicit zoom repaints");
         assert_eq!(
             stack.spotlight().unwrap().radius(),
-            90,
+            94,
             "additive: spotlight preserved (the chord bypasses the resize)"
         );
         // The wheel event's position becomes the fresh layer's focus.
@@ -944,12 +944,12 @@ mod tests {
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // activates + 1.25
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE);
         assert!(!e.repaint.is_empty(), "plain wheel reaches the spotlight");
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
         assert_zoom_near(&stack, 1.25);
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT);
         assert!(!e.repaint.is_empty(), "zoom chord keeps zooming");
         assert_zoom_near(&stack, 1.5625);
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
     }
 
     #[test]
@@ -980,7 +980,7 @@ mod tests {
         let mut stack = ModeStack::new(params());
         stack.add_mode(ModeKind::Zoom); // both layers active
         let e = stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE);
-        assert_eq!(stack.spotlight().unwrap().radius(), 90);
+        assert_eq!(stack.spotlight().unwrap().radius(), 94);
         assert_eq!(
             stack.zoom().unwrap().zoom(),
             1.0,
@@ -1018,23 +1018,23 @@ mod tests {
 
     #[test]
     fn wheel_sub_notch_accumulators_survive_routing() {
-        // D2 regression at stack level: four +60 plain events resize by +20
-        // in total (spotlight accumulator), four +60 Shift events zoom by
-        // step^2 (zoom fractional exponent).
+        // D2 regression at stack level: four +60 plain events shrink the
+        // radius by 12 in total (3 px each at r≈100, where the step is 6),
+        // four +60 Shift events zoom by step^2 (zoom fractional exponent).
         let mut stack = ModeStack::new(params());
         stack.add_mode(ModeKind::Zoom);
         for _ in 0..4 {
             stack.on_wheel(0, pt(10, 10), 60, Modifiers::NONE);
         }
-        assert_eq!(stack.spotlight().unwrap().radius(), 80);
+        assert_eq!(stack.spotlight().unwrap().radius(), 88);
         for _ in 0..4 {
             stack.on_wheel(0, pt(10, 10), 60, Modifiers::SHIFT);
         }
         assert_zoom_near(&stack, 1.5625);
         // Chord deltas must NOT bank into the spotlight accumulator.
         stack.on_wheel(0, pt(10, 10), 60, Modifiers::SHIFT); // (zooms, not banking radius)
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE);
-        assert_eq!(stack.spotlight().unwrap().radius(), 70);
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // step 5 at r=88
+        assert_eq!(stack.spotlight().unwrap().radius(), 83);
     }
 
     // ---- mouse move / drag routing ------------------------------------------
@@ -1142,7 +1142,7 @@ mod tests {
     #[test]
     fn set_mode_snip_enters_capture_stashing_spotlight_and_zoom() {
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // zoom layer on, 1.25
 
         stack.set_mode(ModeKind::Snip);
@@ -1160,7 +1160,7 @@ mod tests {
     fn exit_capture_restores_the_stashed_layers_exactly() {
         let mut stack = ModeStack::new(params());
         stack.seed_cursor(0, pt(30, 40));
-        stack.on_wheel(0, pt(30, 40), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(30, 40), 120, Modifiers::NONE); // radius 94
         stack.on_wheel(0, pt(30, 40), 120, Modifiers::SHIFT); // zoom 1.25 at (30,40)
         stack.set_mode(ModeKind::Snip);
         stack.on_left_button_down(0, pt(2, 2));
@@ -1177,7 +1177,7 @@ mod tests {
             "selection dropped with the snip layer"
         );
         let spot = stack.spotlight().expect("spotlight restored");
-        assert_eq!(spot.radius(), 90, "spotlight state survives the round-trip");
+        assert_eq!(spot.radius(), 94, "spotlight state survives the round-trip");
         assert_eq!((spot.cursor_monitor(), spot.cursor()), (0, pt(30, 40)));
         let zoom = stack.zoom().expect("zoom restored");
         assert!((zoom.zoom() - 1.25).abs() < 1e-6, "zoom factor restored");
@@ -1221,7 +1221,7 @@ mod tests {
     #[test]
     fn add_mode_snip_enters_capture_and_exit_restores_the_stash() {
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
         stack.on_wheel(0, pt(10, 10), 120, Modifiers::SHIFT); // zoom layer on, 1.25
 
         stack.add_mode(ModeKind::Snip);
@@ -1233,14 +1233,14 @@ mod tests {
         stack.exit_capture();
         assert!(!stack.in_capture());
         assert!(!stack.is_active(ModeKind::Snip));
-        assert_eq!(stack.spotlight().unwrap().radius(), 90, "stash restored");
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "stash restored");
         assert_zoom_near(&stack, 1.25);
     }
 
     #[test]
     fn toggle_mode_snip_toggles_capture_in_and_out() {
         let mut stack = ModeStack::new(params());
-        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 90
+        stack.on_wheel(0, pt(10, 10), 120, Modifiers::NONE); // radius 94
 
         stack.toggle_mode(ModeKind::Snip); // ON: enter capture
         assert!(stack.in_capture());
@@ -1250,7 +1250,7 @@ mod tests {
         stack.toggle_mode(ModeKind::Snip); // OFF: exit capture
         assert!(!stack.in_capture());
         assert!(!stack.is_active(ModeKind::Snip));
-        assert_eq!(stack.spotlight().unwrap().radius(), 90, "stash restored");
+        assert_eq!(stack.spotlight().unwrap().radius(), 94, "stash restored");
     }
 
     #[test]

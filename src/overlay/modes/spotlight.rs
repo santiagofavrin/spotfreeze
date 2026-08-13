@@ -16,10 +16,19 @@ use crate::geometry::{Point, Rect, SpotlightShape};
 const MIN_RADIUS: u32 = 10;
 /// Largest selectable spotlight radius (physical px).
 const MAX_RADIUS: u32 = 1000;
-/// Radius change per `WHEEL_DELTA` (120) of wheel delta (physical px).
-const RADIUS_STEP: i64 = 10;
 /// Win32 `WHEEL_DELTA`: one wheel notch.
 const WHEEL_DELTA: i64 = 120;
+/// The wheel step is proportional to the CURRENT radius:
+/// `radius / RADIUS_STEP_DIVISOR` px per notch (minimum 1 px), so the resize
+/// curve is tighter when the spotlight is small and broader when it is
+/// large. At the default radius (150 px) the step is 10 px — the historical
+/// fixed step, so the out-of-box feel is unchanged.
+const RADIUS_STEP_DIVISOR: u32 = 15;
+
+/// Wheel step in px per notch at `radius` (minimum 1 px).
+fn radius_step(radius: u32) -> i64 {
+    (radius / RADIUS_STEP_DIVISOR).max(1) as i64
+}
 
 /// Axis-aligned bounding box of the spotlight circle in monitor-local pixels.
 /// `+1` on each axis: the circle `dx^2 + dy^2 <= r^2` reaches `cx + r`
@@ -81,8 +90,10 @@ pub struct SpotlightMode {
     cursor_monitor: usize,
     radius: u32,
     shape: SpotlightShape,
-    /// Unconsumed raw wheel delta (truncation remainder; |value| stays below
-    /// `WHEEL_DELTA / RADIUS_STEP` after every applied resize).
+    /// Unconsumed wheel delta, banked in `delta × step` units at the current
+    /// radius's step (`WHEEL_DELTA` units = 1 px). |value| stays below
+    /// `WHEEL_DELTA` after every applied resize, i.e. the remainder is
+    /// always worth less than 1 px.
     wheel_accum: i64,
 }
 
@@ -160,28 +171,33 @@ impl SpotlightMode {
 
     /// Resizes the radius by the raw wheel delta.
     ///
-    /// `delta` is in RAW Win32 wheel units: `120` (wheel up) = `-10` px,
-    /// proportionally (`60` = `-5`), clamped to `10..=1000`. Sub-notch deltas from
-    /// smooth-scroll hardware are NOT dropped: they accumulate in
-    /// `wheel_accum` and each event consumes only the delta its whole-pixel
-    /// step accounts for, so a stream of tiny deltas (e.g. precision-touchpad
-    /// `+6` ticks) still resizes once the banked delta reaches a whole pixel.
-    /// The wheel's cursor position is tracked too, so a dirty region covers
-    /// both the old and the new circle.
+    /// `delta` is in RAW Win32 wheel units: `120` (wheel up) shrinks the
+    /// radius by one step, proportionally (`60` = half a step), clamped to
+    /// `10..=1000`. The step scales with the CURRENT radius — see
+    /// [`radius_step`] — so the resize curve is tighter when the spotlight
+    /// is small and broader when it is large (1 px per notch at the 10 px
+    /// minimum, 10 px at the default 150 px radius, 66 px at the 1000 px
+    /// maximum). Sub-notch deltas from smooth-scroll hardware are NOT
+    /// dropped: they accumulate in `wheel_accum` and each event consumes
+    /// only the delta its whole-pixel step accounts for, so a stream of
+    /// tiny deltas (e.g. precision-touchpad `+6` ticks) still resizes once
+    /// the banked delta reaches a whole pixel. The wheel's cursor position
+    /// is tracked too, so a dirty region covers both the old and the new
+    /// circle.
     pub fn on_wheel(&mut self, monitor: usize, at: Point, delta: i32) -> ModeEffect {
-        // i64 math: delta * 10 fits easily. Bank the raw delta, then convert
-        // the banked amount to whole pixels (truncating); the truncation
-        // remainder stays banked for the next event. `WHEEL_DELTA /
-        // RADIUS_STEP` == 12 exactly, so `step * 12` is exactly the delta the
-        // applied step accounts for and the remainder is always < 12 raw
-        // units — the accumulator can never grow unbounded or drift.
-        self.wheel_accum += delta as i64;
+        // i64 math: delta * step fits easily. Bank the delta in delta×step
+        // units at the CURRENT radius's step, then convert the bank to whole
+        // pixels (truncating toward zero); the truncation remainder stays
+        // banked for the next event. The step only changes when whole pixels
+        // are applied, so a banked remainder is always worth less than 1 px
+        // — the accumulator can never grow unbounded or drift.
+        self.wheel_accum += delta as i64 * radius_step(self.radius);
         // Positive wheel deltas mean wheel up, which makes the spotlight
         // smaller. Negative deltas make it larger.
-        let raw_step = (self.wheel_accum * RADIUS_STEP / WHEEL_DELTA) as i32;
-        let step = -raw_step;
-        if raw_step != 0 {
-            self.wheel_accum -= raw_step as i64 * (WHEEL_DELTA / RADIUS_STEP);
+        let px = (self.wheel_accum / WHEEL_DELTA) as i32;
+        let step = -px;
+        if px != 0 {
+            self.wheel_accum -= px as i64 * WHEEL_DELTA;
         }
         let new_radius =
             (self.radius as i32 + step).clamp(MIN_RADIUS as i32, MAX_RADIUS as i32) as u32;
@@ -253,14 +269,14 @@ mod tests {
     fn cycle_shape_preserves_radius_and_cursor() {
         let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
         m.on_mouse_move(1, Point::new(100, 200));
-        m.on_wheel(1, Point::new(100, 200), 120); // radius 40
-        assert_eq!(m.radius(), 40);
+        m.on_wheel(1, Point::new(100, 200), 120); // radius 47 (step 3 at r=50)
+        assert_eq!(m.radius(), 47);
         assert_eq!(m.cursor(), Point::new(100, 200));
         assert_eq!(m.cursor_monitor(), 1);
 
         m.cycle_shape();
         assert_eq!(m.shape(), SpotlightShape::Diamond);
-        assert_eq!(m.radius(), 40, "radius preserved");
+        assert_eq!(m.radius(), 47, "radius preserved");
         assert_eq!(m.cursor(), Point::new(100, 200), "cursor preserved");
         assert_eq!(m.cursor_monitor(), 1, "monitor preserved");
     }
@@ -304,74 +320,105 @@ mod tests {
     // ---- wheel -----------------------------------------------------------
 
     #[test]
-    fn wheel_resizes_120_delta_is_10px() {
-        let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
-        // Union of the r=100 and r=90 circle bboxes at (0,0).
+    fn wheel_step_is_tighter_when_small_and_broader_when_big() {
+        // The resize curve: the per-notch step scales with the current
+        // radius — fine control for small spotlights, coarse for big ones.
+        assert_eq!(radius_step(MIN_RADIUS), 1, "tightest: 1 px per notch");
+        assert_eq!(radius_step(30), 2);
+        assert_eq!(radius_step(100), 6);
+        assert_eq!(
+            radius_step(150),
+            10,
+            "default radius keeps the historical 10 px step"
+        );
+        assert_eq!(radius_step(500), 33);
+        assert_eq!(radius_step(MAX_RADIUS), 66, "broadest at the maximum");
+    }
+
+    #[test]
+    fn wheel_one_notch_at_the_default_radius_is_10px() {
+        // r=160 and r=150 share the 10 px step band, so the round trip is
+        // exact: one notch (120 raw) = 10 px, matching the historical fixed
+        // step at the default radius.
+        let mut m = SpotlightMode::new(160, SpotlightShape::Circle);
+        // Union of the r=160 and r=150 circle bboxes at (0,0).
         let e = m.on_wheel(0, Point::new(0, 0), 120);
-        assert_eq!(m.radius(), 90);
-        assert_eq!(e.repaint, vec![(0, Some(Rect::new(-100, -100, 201, 201)))]);
+        assert_eq!(m.radius(), 150);
+        assert_eq!(e.repaint, vec![(0, Some(Rect::new(-160, -160, 321, 321)))]);
         let e = m.on_wheel(0, Point::new(0, 0), -120);
-        assert_eq!(m.radius(), 100);
-        assert_eq!(e.repaint, vec![(0, Some(Rect::new(-100, -100, 201, 201)))]);
+        assert_eq!(m.radius(), 160);
+        assert_eq!(e.repaint, vec![(0, Some(Rect::new(-160, -160, 321, 321)))]);
     }
 
     #[test]
     fn wheel_multi_notch_and_fine_delta_scale_proportionally() {
         let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
+        // Step at r=100 is 6 px per notch: 240 raw = two notches = -12.
         m.on_wheel(0, Point::new(0, 0), 240);
-        assert_eq!(m.radius(), 80);
+        assert_eq!(m.radius(), 88);
+        // Step at r=88 is 5: +60 raw = half a notch = -2 (remainder banked).
         m.on_wheel(0, Point::new(0, 0), 60);
-        assert_eq!(m.radius(), 75);
+        assert_eq!(m.radius(), 86);
+        // -60 at r=86 (still step 5) cancels the +60 exactly.
         m.on_wheel(0, Point::new(0, 0), -60);
-        assert_eq!(m.radius(), 80);
+        assert_eq!(m.radius(), 88);
     }
 
     #[test]
     fn wheel_sub_notch_deltas_still_resize() {
         // D2 regression: precision touchpads send sub-notch deltas (|delta| <
-        // 120). Four +60 events MUST change the radius (-5 px each).
+        // 120). At r=100 (step 6) four +60 events MUST change the radius
+        // (-3 px each: 60 raw = half a notch).
         let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         for _ in 0..4 {
             m.on_wheel(0, Point::new(0, 0), 60);
         }
-        assert_eq!(m.radius(), 80, "four +60 deltas = half a notch each pair");
-        // And downwards.
+        assert_eq!(m.radius(), 88, "four +60 deltas = half a notch each");
+        // And downwards: the step follows the CURRENT radius (5 at r=88,
+        // then 6 again from r=90), so the way back covers different ground —
+        // half-notch remainders bank and are never dropped.
         for _ in 0..4 {
             m.on_wheel(0, Point::new(0, 0), -60);
         }
-        assert_eq!(m.radius(), 100);
+        assert_eq!(m.radius(), 99);
     }
 
     #[test]
     fn wheel_tiny_deltas_accumulate_to_whole_pixels() {
-        // D2 regression: very fine deltas below one pixel per event (+6 raw =
-        // 0.5 px) must NOT be dropped — they bank until a whole pixel exists.
+        // D2 regression: very fine deltas below one pixel per event must NOT
+        // be dropped — they bank until a whole pixel exists. At r=100 the
+        // step is 6, so +6 raw = 0.3 px.
         let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 6);
-        assert_eq!(m.radius(), 100, "first +6 banks 0.5 px: no change yet");
+        assert_eq!(m.radius(), 100, "first +6 banks 0.3 px: no change yet");
         m.on_wheel(0, Point::new(0, 0), 6);
-        assert_eq!(m.radius(), 99, "two +6 events = one whole pixel smaller");
-        // Twenty +6 events total = 120 raw = one notch = -10 px.
-        for _ in 0..18 {
+        assert_eq!(m.radius(), 100, "two +6 events = 0.6 px: still banked");
+        m.on_wheel(0, Point::new(0, 0), 6);
+        m.on_wheel(0, Point::new(0, 0), 6);
+        assert_eq!(m.radius(), 99, "four +6 events = 1.2 px: one whole pixel");
+        // Twenty +6 events total = 120 raw = one notch = -6 px at step 6.
+        for _ in 0..16 {
             m.on_wheel(0, Point::new(0, 0), 6);
         }
-        assert_eq!(m.radius(), 90);
+        assert_eq!(m.radius(), 94);
     }
 
     #[test]
     fn wheel_remainder_carries_across_events_without_drift() {
-        // +130 twice = 260 raw = 21.67 px; Bresenham banking yields exactly
-        // 21 px split 10 + 11 (the truncation remainder is never lost).
+        // +130 twice at r=100 (step 6): 260 raw × 6 = 13 px; Bresenham
+        // banking yields exactly 13 px split 6 + 7 (the truncation remainder
+        // is never lost).
         let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 130);
-        assert_eq!(m.radius(), 90);
+        assert_eq!(m.radius(), 94);
         m.on_wheel(0, Point::new(0, 0), 130);
-        assert_eq!(m.radius(), 79);
-        // A full notch immediately after still yields exactly +10 (no residue
-        // distortion): 260 + 120 = 380 raw = 31.67 px → 131 total.
+        assert_eq!(m.radius(), 87);
+        // A full notch immediately after, at r=87 (step 5), yields exactly
+        // -5 (no residue distortion).
         m.on_wheel(0, Point::new(0, 0), 120);
-        assert_eq!(m.radius(), 69);
-        // Direction reversal is symmetric: ±60 cancel exactly.
+        assert_eq!(m.radius(), 82);
+        // Direction reversal within the same step band is symmetric: ±60 at
+        // r=100 (step 6; r=97 stays in the band) cancel exactly.
         let mut m = SpotlightMode::new(100, SpotlightShape::Circle);
         m.on_wheel(0, Point::new(0, 0), 60);
         m.on_wheel(0, Point::new(0, 0), -60);
@@ -403,9 +450,10 @@ mod tests {
         let mut m = SpotlightMode::new(50, SpotlightShape::Circle);
         m.on_mouse_move(0, Point::new(200, 200));
         // Wheel at a different position: cursor follows the wheel event.
+        // Step at r=50 is 3, so one notch shrinks to r=47.
         let e = m.on_wheel(0, Point::new(100, 100), 120);
-        // Old: circle r=50 at (200,200); new: r=40 at (100,100).
-        // Union: x/y from the new bbox (60,60), right/bottom from the old (251,251).
-        assert_eq!(e.repaint, vec![(0, Some(Rect::new(60, 60, 191, 191)))],);
+        // Old: circle r=50 at (200,200); new: r=47 at (100,100).
+        // Union: x/y from the new bbox (53,53), right/bottom from the old (251,251).
+        assert_eq!(e.repaint, vec![(0, Some(Rect::new(53, 53, 198, 198)))],);
     }
 }

@@ -84,7 +84,7 @@ screen is frozen.
 | Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
-| Resize spotlight circle | Mouse wheel | While spotlight is active |
+| Resize spotlight circle | Mouse wheel | While spotlight is active — the step scales with the current radius, so small spotlights resize tightly and large ones broadly |
 | Dismiss zoom | `0` | While zoom is active |
 | Copy screenshot to clipboard | `Ctrl+C` | While frozen (see below) |
 | Unfreeze / exit capture | `Esc` | While frozen — see below |
