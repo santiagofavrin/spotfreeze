@@ -13,3 +13,6 @@ spotfreeze.jsonc
 *.swp
 .DS_Store
 Thumbs.db
+
+# OpenCode local config
+.opencode
