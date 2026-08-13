@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.2](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.1...v1.21.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* carry the spotlight shape through the macOS settings window ivars ([2a4da54](https://github.com/santiagofavrin/spotfreeze/commit/2a4da54b348637b33005850419d75e8a9dc46456))
+
 ## [1.21.1](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.0...v1.21.1) (2026-08-13)
 
 
