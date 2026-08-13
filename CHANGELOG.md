@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.3](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.2...v1.21.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* keep wayland overlay shm slots complete on dirty presents ([fcacebb](https://github.com/santiagofavrin/spotfreeze/commit/fcacebb4cc54d503a0444588f122c96f51280585))
+
 ## [1.21.2](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.1...v1.21.2) (2026-08-13)
 
 
