@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.20.0...v1.21.0) (2026-08-13)
+
+
+### Features
+
+* cycle spotlight shapes with S and add rectangle shape ([537507e](https://github.com/santiagofavrin/spotfreeze/commit/537507e9bc7eda82be5f44bc8ce363b1469fd8e5))
+
 ## [1.20.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.19.0...v1.20.0) (2026-08-11)
 
 
