@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1](https://github.com/santiagofavrin/spotfreeze/compare/v1.21.0...v1.21.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* preserve spotlight shape in the macOS settings window ([5617685](https://github.com/santiagofavrin/spotfreeze/commit/561768548b3e548800ff913f17a384861da7222f))
+
 ## [1.21.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.20.0...v1.21.0) (2026-08-13)
 
 
