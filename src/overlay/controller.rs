@@ -30,9 +30,10 @@
 //!   its own veil: the lighter, cooler snip veil (`overlay.snip_dim_opacity`
 //!   / `overlay.snip_color`) replaces the spotlight veil, and the drawn
 //!   rectangle stays COMPLETELY CLEAR (the un-dimmed base) behind a crisp
-//!   two-tone border. Esc in capture mode exits back to the pre-capture
-//!   view with the stashed spotlight/zoom state restored ([`exit_capture`]);
-//!   Esc outside capture mode unfreezes.
+//!   two-tone border. Esc in capture mode is the same as Ctrl+C: copy the
+//!   selection (or the focused monitor) and unfreeze. Esc outside capture
+//!   unfreezes without copying. The freeze-toggle still only EXITS capture
+//!   via [`unfreeze`] / [`exit_capture`], restoring the pre-capture view.
 //! - **Rendering**: every repaint composes the full frame via
 //!   [`crate::overlay::composite::compose_frame`] with a
 //!   [`crate::overlay::composite::RenderState`] built from the active layers
@@ -206,6 +207,15 @@ impl OverlayController {
         self.inner.borrow().is_some()
     }
 
+    /// True while the session is in capture (snip) mode — the freeze has been
+    /// re-based and a snip layer is active. False when unfrozen or viewing.
+    pub fn in_capture(&self) -> bool {
+        self.inner
+            .borrow()
+            .as_ref()
+            .is_some_and(|s| s.capture.is_some())
+    }
+
     /// Number of overlay windows/monitors while frozen; 0 otherwise.
     pub fn monitor_count(&self) -> usize {
         self.inner.borrow().as_ref().map_or(0, |s| s.windows.len())
@@ -296,11 +306,11 @@ impl OverlayController {
         Ok(())
     }
 
-    /// Esc / cancel contract: in CAPTURE mode this only EXITS capture — the
-    /// pre-capture originals and the stashed spotlight/zoom state are
-    /// restored (the re-frozen base is dropped) and the session stays frozen;
-    /// anywhere else it destroys all overlay windows and drops the captures
-    /// immediately (no fade, no animation). No-op when not frozen.
+    /// Tear the session down, or — when already in capture — only EXIT
+    /// capture: the pre-capture originals and the stashed spotlight/zoom
+    /// state are restored (the re-frozen base is dropped) and the session
+    /// stays frozen. Used by the freeze-toggle. The Esc binding goes through
+    /// [`cancel`](Self::cancel) instead. No-op when not frozen.
     pub fn unfreeze(&mut self) {
         {
             let mut slot = self.inner.borrow_mut();
@@ -457,7 +467,7 @@ impl OverlayController {
     /// The cancel (Esc), copy (Ctrl+C), mode-switch/toggle, and reset-zoom
     /// gestures are NOT handled here — the platform shell catches them (as
     /// global hotkeys on Windows, as overlay key events elsewhere) and calls
-    /// [`unfreeze`](Self::unfreeze),
+    /// [`cancel`](Self::cancel),
     /// [`snip_copy_and_close`](Self::snip_copy_and_close),
     /// [`set_mode`](Self::set_mode) / [`add_mode`](Self::add_mode) /
     /// [`toggle_mode`](Self::toggle_mode), or [`reset_view`](Self::reset_view).
@@ -497,21 +507,38 @@ impl OverlayController {
         drain_pending_repaints(state);
     }
 
-    /// Ctrl+C contract: when a snip selection exists, crop it from that
-    /// monitor's current base — in capture mode the re-frozen EFFECTED frame
-    /// (spotlight/zoom baked in), otherwise the zoomed view when the zoom
-    /// layer is active on that monitor, else the ORIGINAL capture — WYSIWYG
-    /// with the presented frame — and copy it to the clipboard; otherwise
-    /// copy the FULL current base of the monitor currently under the cursor
-    /// ("focused screen"). Works from ANY mode combination. Then unfreeze.
-    /// `Ok(())` no-op when not frozen.
+    /// Esc / cancel contract: in CAPTURE mode this is the same as
+    /// [`snip_copy_and_close`](Self::snip_copy_and_close) (copy the selection
+    /// or focused monitor, then unfreeze). Anywhere else it destroys all
+    /// overlay windows without copying. No-op when not frozen.
+    pub fn cancel(&mut self, services: &dyn PlatformServices) -> Result<()> {
+        if self.in_capture() {
+            self.snip_copy_and_close(services)
+        } else {
+            self.unfreeze();
+            Ok(())
+        }
+    }
+
+    /// Ctrl+C contract: outside capture this ENTERS capture — same as the
+    /// `C` binding ([`set_mode`](Self::set_mode)`(Snip)`). In capture, when a
+    /// snip selection exists, crop it from that monitor's re-frozen EFFECTED
+    /// frame (spotlight/zoom baked in) and copy it to the clipboard;
+    /// otherwise copy the FULL current base of the monitor currently under
+    /// the cursor ("focused screen"). Then unfreeze. `Ok(())` no-op when not
+    /// frozen.
     ///
     /// The selection is monitor-local (drags clamp at that monitor's edges);
     /// the crop normalizes any drag direction via [`crop_normalized`].
     pub fn snip_copy_and_close(&mut self, services: &dyn PlatformServices) -> Result<()> {
-        // Closing is unconditional, so take the session state out up-front;
-        // `None` (not frozen) is the documented no-op and never touches the
-        // clipboard.
+        if !self.is_frozen() {
+            return Ok(());
+        }
+        if !self.in_capture() {
+            self.set_mode(ModeKind::Snip, services);
+            return Ok(());
+        }
+        // Closing is unconditional, so take the session state out up-front.
         let Some(state) = self.inner.borrow_mut().take() else {
             return Ok(());
         };
@@ -1405,6 +1432,13 @@ mod tests {
         assert!(!c.is_frozen());
     }
 
+    #[test]
+    fn cancel_when_unfrozen_is_ok_noop_and_touches_nothing() {
+        let mut c = OverlayController::new();
+        assert!(c.cancel(&PanicServices).is_ok());
+        assert!(!c.is_frozen());
+    }
+
     // ---- veil selection ----
 
     #[test]
@@ -1763,8 +1797,12 @@ mod tests {
     #[test]
     fn esc_in_spotlight_mode_fully_unfreezes() {
         let mut f = freeze_fake(Point::new(16, 16));
-        f.controller.unfreeze();
+        f.controller.cancel(&f.services).expect("cancel");
         assert!(!f.controller.is_frozen());
+        assert!(
+            f.copied.borrow().is_empty(),
+            "Esc outside capture must not copy"
+        );
     }
 
     #[test]
@@ -1772,8 +1810,27 @@ mod tests {
         let mut f = freeze_fake(Point::new(16, 16));
         spotlight_off(&mut f); // spotlight off
         assert!(f.controller.is_frozen());
-        f.controller.unfreeze();
+        f.controller.cancel(&f.services).expect("cancel");
         assert!(!f.controller.is_frozen());
+        assert!(
+            f.copied.borrow().is_empty(),
+            "Esc outside capture must not copy"
+        );
+    }
+
+    #[test]
+    fn ctrl_c_outside_capture_enters_capture_like_c() {
+        let mut f = freeze_fake(Point::new(16, 16));
+        f.controller
+            .snip_copy_and_close(&f.services)
+            .expect("copy binding");
+        assert!(f.controller.is_frozen(), "Ctrl+C must stay frozen");
+        assert!(f.controller.in_capture());
+        assert_eq!(f.controller.active_mode(), ModeKind::Snip);
+        assert!(
+            f.copied.borrow().is_empty(),
+            "Ctrl+C outside capture must not copy"
+        );
     }
 
     #[test]
@@ -1808,8 +1865,11 @@ mod tests {
             "one uniform indicator ring around the frame"
         );
 
-        f.controller.unfreeze(); // Esc: exit capture, stay frozen
-        assert!(f.controller.is_frozen(), "Esc in capture must NOT unfreeze");
+        f.controller.unfreeze(); // freeze-toggle: exit capture, stay frozen
+        assert!(
+            f.controller.is_frozen(),
+            "unfreeze in capture must NOT tear down"
+        );
         assert_eq!(f.controller.active_mode(), ModeKind::Spotlight);
         assert_eq!(
             last_present(&f.presents[0]).pixels,
@@ -1817,8 +1877,44 @@ mod tests {
             "the pre-capture view is restored exactly"
         );
 
-        f.controller.unfreeze(); // second Esc: unfreeze for real
+        f.controller.unfreeze(); // second unfreeze: tear down
         assert!(!f.controller.is_frozen());
+    }
+
+    #[test]
+    fn esc_in_capture_copies_and_unfreezes_like_ctrl_c() {
+        let mut f = freeze_fake(Point::new(2, 2)); // hole parked in the corner
+        let pre_capture = last_present(&f.presents[0]);
+
+        f.controller.set_mode(ModeKind::Snip, &f.services);
+        for event in [
+            OverlayEvent::LeftButtonDown {
+                at: Point::new(10, 10),
+            },
+            OverlayEvent::MouseMove {
+                at: Point::new(26, 26),
+            },
+            OverlayEvent::LeftButtonUp {
+                at: Point::new(26, 26),
+            },
+        ] {
+            f.controller.handle_overlay_event(0, event);
+        }
+        f.controller.cancel(&f.services).expect("esc copy");
+        assert!(
+            !f.controller.is_frozen(),
+            "Esc in capture closes the session"
+        );
+
+        let copied = f.copied.borrow();
+        let crop = copied.last().expect("one clipboard write");
+        assert_eq!((crop.width, crop.height), (16, 16));
+        let expected = crop_normalized(&pre_capture, Point::new(10, 10), Point::new(26, 26))
+            .expect("non-empty selection");
+        assert_eq!(
+            crop.pixels, expected.pixels,
+            "Esc copies the same effected crop as Ctrl+C"
+        );
     }
 
     #[test]
@@ -1972,12 +2068,12 @@ mod tests {
         assert_eq!(unveiled.pixels, make_buf(32, 32, coord_pattern).pixels);
 
         f.controller.set_mode(ModeKind::Snip, &f.services);
-        f.controller.unfreeze(); // exit capture
+        f.controller.unfreeze(); // freeze-toggle: exit capture
         assert!(f.controller.is_frozen());
         assert_eq!(
             last_present(&f.presents[0]).pixels,
             unveiled.pixels,
-            "spotlight stays off after Esc from capture"
+            "spotlight stays off after exiting capture"
         );
         // And it toggles back on normally.
         f.controller.toggle_mode(ModeKind::Spotlight, &f.services);
@@ -2027,8 +2123,8 @@ mod tests {
             "the capture indicator marks the re-based session"
         );
 
-        // Esc exits capture (the session stays frozen); a second Esc
-        // unfreezes for real.
+        // Freeze-toggle exits capture (the session stays frozen); a second
+        // unfreeze tears the session down.
         f.controller.unfreeze();
         assert!(f.controller.is_frozen());
         assert_eq!(
@@ -2148,7 +2244,7 @@ mod tests {
         let mut f = freeze_fake(Point::new(16, 16));
         f.controller.set_mode(ModeKind::Snip, &f.services);
         let before = f.presents[0].borrow().len();
-        // Esc in capture only exits capture: the exit repaint, nothing else.
+        // Unfreeze in capture only exits capture: the exit repaint, nothing else.
         f.controller.unfreeze();
         assert!(f.controller.is_frozen());
         assert_eq!(
@@ -2294,7 +2390,7 @@ mod tests {
         // Capture entry: exactly one repaint per monitor (no transition).
         f.controller.set_mode(ModeKind::Snip, &f.services);
         assert_eq!(f.presents[0].borrow().len(), before + 1);
-        // Esc back out of capture: one repaint.
+        // Freeze-toggle back out of capture: one repaint.
         f.controller.unfreeze();
         assert!(f.controller.is_frozen());
         assert_eq!(f.presents[0].borrow().len(), before + 2);
@@ -2624,7 +2720,7 @@ mod tests {
 
         // Enter capture mode and exit back to the frozen view.
         f.controller.set_mode(ModeKind::Snip, &f.services);
-        f.controller.unfreeze(); // Esc: exits capture, stays frozen
+        f.controller.unfreeze(); // freeze-toggle: exits capture, stays frozen
         assert!(f.controller.is_frozen());
 
         // The legend position is unchanged across the capture transition.

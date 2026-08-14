@@ -227,7 +227,11 @@ impl AppState {
                     eprintln!("spotfreeze: could not copy the snip: {e:#}");
                 }
             }
-            FrozenAction::Cancel => self.controller.unfreeze(),
+            FrozenAction::Cancel => {
+                if let Err(e) = self.controller.cancel(&self.services) {
+                    eprintln!("spotfreeze: could not copy the snip: {e:#}");
+                }
+            }
             FrozenAction::ResetZoom => self.controller.reset_view(),
         }
         // The controller may have unfrozen itself (copy, or a mode asking to

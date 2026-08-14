@@ -86,8 +86,9 @@ a platform shell (OS-specific)? Pure logic in the core, OS glue in the shell.
   (`reset_view`) drops it outright.
 - **Capture** (`C`) **re-freezes**: the current view (spotlight/zoom baked in)
   becomes the new frozen frame and a drag-selection snips the *effected*
-  pixels. `Esc` in capture exits back to the pre-capture view; `Esc` outside
-  capture unfreezes.
+  pixels. `Ctrl+C` outside capture enters capture (same as `C`). `Esc` and
+  `Ctrl+C` in capture copy the snip (or focused monitor) and unfreeze.
+  `Esc` outside capture unfreezes.
 - The **legend HUD** is painted into the composed frame only — never into the
   capture originals — so it can never leak into a snip copy or the capture
   re-base (`rebase_freeze` composes without it). Its text is anti-aliased

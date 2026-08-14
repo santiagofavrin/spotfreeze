@@ -131,12 +131,12 @@ pub struct HotkeySettings {
     /// a modifier-only binding (e.g. bare `Shift`), not a full gesture.
     /// Default: `Shift`.
     pub zoom_modifier: Modifiers,
-    /// Capture mode: copy the selection (or the focused monitor's full frame when
-    /// no selection exists) to the clipboard, then close the overlay.
-    /// Default: `Ctrl+C`.
+    /// While frozen: outside capture, enter capture (same as `mode_snip`);
+    /// in capture, copy the selection (or the focused monitor's full frame)
+    /// to the clipboard and close the overlay. Default: `Ctrl+C`.
     pub snip_copy: HotkeyGesture,
-    /// Unfreeze (in capture mode: exit capture back to the pre-capture frozen
-    /// view instead). Default: `Esc`.
+    /// While frozen: unfreeze. In capture mode: same as `snip_copy` (copy +
+    /// close). Default: `Esc`.
     pub cancel: HotkeyGesture,
     /// Zoom layer: dismiss zoom (back to the un-zoomed view). Default: `0`.
     pub reset_zoom: HotkeyGesture,

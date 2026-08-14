@@ -1278,25 +1278,13 @@ mod tests {
         spotlight_hole_star(&mut dst, &src, Point::new(10, 10), 10);
 
         // Center pixel revealed.
-        assert_eq!(
-            px(&dst, 10, 10),
-            pattern(10, 10),
-            "center pixel revealed"
-        );
+        assert_eq!(px(&dst, 10, 10), pattern(10, 10), "center pixel revealed");
 
         // Top tip: directly above center at y = cy - r = 0.
-        assert_eq!(
-            px(&dst, 10, 0),
-            pattern(10, 0),
-            "top tip revealed"
-        );
+        assert_eq!(px(&dst, 10, 0), pattern(10, 0), "top tip revealed");
 
         // Bottom tip: directly below center at y = cy + r = 20.
-        assert_eq!(
-            px(&dst, 10, 20),
-            pattern(10, 20),
-            "bottom tip revealed"
-        );
+        assert_eq!(px(&dst, 10, 20), pattern(10, 20), "bottom tip revealed");
 
         // Far-corner bbox pixel: top-left (0,0) is outside both triangles.
         assert_eq!(

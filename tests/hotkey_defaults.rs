@@ -65,11 +65,11 @@ fn default_display_strings_match_docs() {
     let h = HotkeySettings::default();
     let expected = [
         "Alt+Backtick", // freeze_toggle
-        "S",      // mode_spotlight
-        "C",      // mode_snip
-        "Ctrl+C", // snip_copy
-        "Esc",    // cancel
-        "0",      // reset_zoom
+        "S",            // mode_spotlight
+        "C",            // mode_snip
+        "Ctrl+C",       // snip_copy
+        "Esc",          // cancel
+        "0",            // reset_zoom
     ];
     for ((name, g), want) in gesture_fields(&h).into_iter().zip(expected) {
         assert_eq!(g.to_display(), want, "{name} display string");

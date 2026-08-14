@@ -79,23 +79,24 @@ screen is frozen.
 
 | Action | Default | Scope |
 | --- | --- | --- |
-| Toggle screen freeze | `Alt+Backtick` | Global — works from any app (in capture mode it backs out of capture first, like `Esc`) |
+| Toggle screen freeze | `Alt+Backtick` | Global — works from any app (in capture mode it backs out of capture first) |
 | Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → Star → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
 | Resize spotlight circle | Mouse wheel | While spotlight is active — the step scales with the current radius, so small spotlights resize tightly and large ones broadly |
 | Dismiss zoom | `0` | While zoom is active |
-| Copy screenshot to clipboard | `Ctrl+C` | While frozen (see below) |
-| Unfreeze / exit capture | `Esc` | While frozen — see below |
+| Copy / enter capture | `Ctrl+C` | While frozen — in capture: copy + close; otherwise enter capture (same as `C`) |
+| Copy / unfreeze | `Esc` | While frozen — in capture: same as `Ctrl+C`; otherwise unfreeze without copying |
 
 Other defaults: spotlight radius `150` px, dim-veil opacity `160` (0–255),
 dim-veil color black (`#000000`), capture-veil opacity `90`, capture-veil
 color dark slate (`#16283A`), zoom step `1.25` (min `1.0`, max `16.0`).
 
 Freezing starts with the spotlight on. `Esc` unfreezes from spotlight mode
-(on or off); in capture mode it exits capture instead — back to the
-pre-capture frozen view with its spotlight/zoom state restored (the capture
-re-freeze is dropped). `Ctrl+C` copies and closes from anywhere.
+(on or off). In capture mode, `Esc` and `Ctrl+C` both copy the selection
+(or the focused monitor) to the clipboard and unfreeze. Outside capture,
+`Ctrl+C` enters capture mode (same as `C`). The freeze-toggle still backs
+out of capture first without copying.
 
 Freezing and unfreezing are instant — no fade, no animation. The overlay
 appears at full strength (veil, spotlight circle, legend all settled from
@@ -118,9 +119,10 @@ Spotlight and zoom are **layers**; capture is the only real mode switch:
   outright.
 - **`C` (Capture) — re-freeze.** The view exactly as it is now — spotlight
   and/or zoom baked in — becomes the new frozen frame, and a drag-selection
-  snips the *effected* pixels from it. `Esc` discards the re-frozen frame and
-  returns to the pre-capture view (spotlight on/off and zoom restored);
-  pressing `C` again while in capture just clears the selection.
+  snips the *effected* pixels from it. `Ctrl+C` from spotlight (or any
+  non-capture view) enters capture the same way. In capture, `Esc` and
+  `Ctrl+C` copy the snip (or the focused monitor) and unfreeze; pressing
+  `C` again while in capture just clears the selection.
 
 The wheel follows the layers: a plain wheel resizes the spotlight whenever it
 is active and never zooms, while `Shift`+wheel zooms from anywhere —
@@ -276,18 +278,19 @@ Example `spotfreeze.jsonc` (excerpt):
 
 ## Copying screenshots
 
-While frozen, pressing `Ctrl+C` (the copy binding) copies to the clipboard and
-then unfreezes — from any mode or mode combination:
+While frozen and **in capture mode**, pressing `Ctrl+C` or `Esc` copies to
+the clipboard and then unfreezes:
 
-- **If you drew a selection** in Snip mode → the selected rectangle is copied,
-  cropped from the *original, undarkened* capture.
+- **If you drew a selection** → the selected rectangle is copied from the
+  re-frozen (effected) frame.
 - **If no selection exists** → the **entire screen currently under the cursor**
   (the "focused" monitor) is copied.
 
+Outside capture, `Ctrl+C` enters capture (same as `C`). `Esc` outside
+capture unfreezes without copying.
+
 Copying is multi-monitor aware: the focused screen is whichever physical
 monitor the cursor is on, regardless of monitor arrangement.
-
-Press `Esc` at any time while frozen to unfreeze without copying.
 
 ## Build from source
 

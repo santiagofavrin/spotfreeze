@@ -244,8 +244,8 @@ impl GestureField {
             Self::FreezeToggle => "Freeze toggle (global)",
             Self::ModeSpotlight => "Mode: Spotlight",
             Self::ModeSnip => "Mode: Capture",
-            Self::SnipCopy => "Snip: copy to clipboard",
-            Self::Cancel => "Cancel / unfreeze",
+            Self::SnipCopy => "Copy / enter capture",
+            Self::Cancel => "Copy / unfreeze",
             Self::ResetZoom => "Zoom: reset to 100%",
         }
     }

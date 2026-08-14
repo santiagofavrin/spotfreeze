@@ -17,10 +17,11 @@
 //!   [`ModeStack::enter_capture`]**: the controller RE-BASES the freeze on the
 //!   currently composited view (the spotlight/zoom effects active at that
 //!   moment baked in); the stack STASHES the spotlight/zoom layers and
-//!   activates a fresh snip layer for the drag-selection. Esc →
-//!   [`ModeStack::exit_capture`]: the stashed layers come back exactly as
-//!   they were (spotlight on/off state, zoom factor/focus) and the snip layer
-//!   is dropped; the controller restores the pre-capture base.
+//!   activates a fresh snip layer for the drag-selection. The freeze-toggle
+//!   (and any other explicit exit) → [`ModeStack::exit_capture`]: the stashed
+//!   layers come back exactly as they were (spotlight on/off state, zoom
+//!   factor/focus) and the snip layer is dropped; the controller restores the
+//!   pre-capture base. Esc / Ctrl+C in capture copy and unfreeze instead.
 //! - **Zoom (the zoom-modifier wheel chord from anywhere) → an IMPLICIT
 //!   effect LAYER, not a mode, with no hotkey of its own**: the chord
 //!   (default Shift+wheel) zooms from ANY state, IMPLICITLY ACTIVATING the
@@ -766,10 +767,7 @@ mod tests {
         );
 
         stack.toggle_mode(ModeKind::Spotlight); // Diamond → Star
-        assert_eq!(
-            stack.spotlight().unwrap().shape(),
-            SpotlightShape::Star
-        );
+        assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Star);
         assert_eq!(stack.spotlight().unwrap().radius(), 94, "radius preserved");
 
         stack.toggle_mode(ModeKind::Spotlight); // Star → RoundedRect
@@ -821,10 +819,7 @@ mod tests {
 
         // S: Diamond → Star
         stack.toggle_mode(ModeKind::Spotlight);
-        assert_eq!(
-            stack.spotlight().unwrap().shape(),
-            SpotlightShape::Star
-        );
+        assert_eq!(stack.spotlight().unwrap().shape(), SpotlightShape::Star);
 
         // S: Star → RoundedRect
         stack.toggle_mode(ModeKind::Spotlight);

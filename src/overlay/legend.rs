@@ -442,12 +442,21 @@ impl Legend {
             let keycap_x = current_x;
             let keycap_y = y0 + (ph as i32 - keycap_h as i32) / 2;
 
-            let keycap_bg = if on { KEYCAP_BG_ACTIVE } else { KEYCAP_BG_INACTIVE };
-            let keycap_border = if on { KEYCAP_BORDER_ACTIVE } else { KEYCAP_BORDER_INACTIVE };
+            let keycap_bg = if on {
+                KEYCAP_BG_ACTIVE
+            } else {
+                KEYCAP_BG_INACTIVE
+            };
+            let keycap_border = if on {
+                KEYCAP_BORDER_ACTIVE
+            } else {
+                KEYCAP_BORDER_INACTIVE
+            };
 
             for y in keycap_y..keycap_y + keycap_h as i32 {
                 for x in keycap_x..keycap_x + keycap_w as i32 {
-                    let is_outer = rounded_rect_contains(x, y, keycap_x, keycap_y, keycap_w, keycap_h, 2);
+                    let is_outer =
+                        rounded_rect_contains(x, y, keycap_x, keycap_y, keycap_w, keycap_h, 2);
                     let is_inner = rounded_rect_contains(
                         x,
                         y,
@@ -1078,7 +1087,11 @@ mod tests {
 
     #[test]
     fn paint_skips_monitors_smaller_than_the_pill_and_empty_legends() {
-        let legend = Legend::new(&tabs(&[("Spotlight", "S"), ("Zoom", "F"), ("Capture", "C")]));
+        let legend = Legend::new(&tabs(&[
+            ("Spotlight", "S"),
+            ("Zoom", "F"),
+            ("Capture", "C"),
+        ]));
         let mut tiny = frame(32, 32, [100, 100, 100, 255]);
         let before = tiny.pixels.clone();
         legend.paint(&mut tiny, &[true, false, false], Point::new(0, 0));

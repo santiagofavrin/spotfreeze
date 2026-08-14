@@ -193,7 +193,7 @@ fn capture_entry_and_esc_exit_repaint_once_without_flashing() {
     let before = f.presents[0].borrow().len();
     f.controller.set_mode(ModeKind::Snip, &f.services);
     assert_eq!(f.presents[0].borrow().len(), before + 1);
-    f.controller.unfreeze(); // Esc in capture: exit capture, stay frozen
+    f.controller.unfreeze(); // freeze-toggle in capture: exit capture, stay frozen
     assert!(f.controller.is_frozen());
     assert_eq!(
         f.presents[0].borrow().len(),

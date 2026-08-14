@@ -8,7 +8,7 @@
 //!   hotkeys. The surface factory below wraps the controller's event sink and
 //!   routes `KeyDown` events through [`plan_frozen_registrations`] /
 //!   [`match_frozen_key`] → `set_mode` / `add_mode` / `reset_view` /
-//!   `snip_copy_and_close` / `unfreeze` (mouse events pass through). The plan
+//!   `snip_copy_and_close` / `cancel` (mouse events pass through). The plan
 //!   is rebuilt from the current settings at every freeze.
 //! - **Settings are edited in a native settings window** (tray "Settings…";
 //!   the raw JSONC is reachable via "Open Settings Folder"). Saving persists
@@ -137,7 +137,11 @@ impl AppState {
                     queue_alert(format!("Could not copy the snip:\n{e:#}"));
                 }
             }
-            Some(FrozenAction::Cancel) => self.controller.unfreeze(),
+            Some(FrozenAction::Cancel) => {
+                if let Err(e) = self.controller.cancel(&self.services) {
+                    queue_alert(format!("Could not copy the snip:\n{e:#}"));
+                }
+            }
             Some(FrozenAction::ResetZoom) => self.controller.reset_view(),
             None => {}
         }

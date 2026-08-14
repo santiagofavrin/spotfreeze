@@ -111,9 +111,10 @@ enum UpdateOutcome {
 ///    * `freeze_toggle` (always active) → freeze/unfreeze;
 ///    * while frozen only: `mode_spotlight` → `OverlayController::toggle_mode`
 ///      (spotlight cycles shapes, then turns off on the last shape), `mode_snip` → `OverlayController::set_mode`
-///      (enter capture mode, re-basing the freeze), plus `cancel` → unfreeze
-///      (in capture mode: exit capture back to the pre-capture view),
-///      `snip_copy` → `OverlayController::snip_copy_and_close`, `reset_zoom`
+///      (enter capture mode, re-basing the freeze), plus `cancel` →
+///      [`OverlayController::cancel`] (in capture: copy + close, else
+///      unfreeze), `snip_copy` → `OverlayController::snip_copy_and_close`
+///      (outside capture: enter capture; in capture: copy + close), `reset_zoom`
 ///      → `OverlayController::reset_view`: five registrations (see
 ///      [`plan_frozen_registrations`]). Zoom has no hotkey — it is the
 ///      implicit zoom-modifier wheel chord.
@@ -485,7 +486,11 @@ fn on_hotkey(state: &mut AppState, hwnd: HWND, wparam: WPARAM) {
                 show_error(Some(hwnd), &format!("Could not copy the snip:\n{e:#}"));
             }
         }
-        FrozenAction::Cancel => state.controller.unfreeze(),
+        FrozenAction::Cancel => {
+            if let Err(e) = state.controller.cancel(&state.services) {
+                show_error(Some(hwnd), &format!("Could not copy the snip:\n{e:#}"));
+            }
+        }
         FrozenAction::ResetZoom => reset_zoom(state),
     }
     // The controller may have unfrozen itself (snip copy, or a mode asking to

@@ -388,10 +388,7 @@ mod tests {
             err.contains("circle"),
             "error message lists valid options: {err}"
         );
-        assert!(
-            err.contains("star"),
-            "error message lists star: {err}"
-        );
+        assert!(err.contains("star"), "error message lists star: {err}");
     }
 
     #[test]

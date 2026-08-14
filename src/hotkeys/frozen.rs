@@ -25,7 +25,10 @@ pub enum FrozenAction {
     /// emitted by the current plan; kept for the platform shells, which
     /// dispatch every variant to the controller.
     AddMode(ModeKind),
+    /// Copy binding. In capture: copy the selection (or focused monitor) and
+    /// unfreeze. Outside capture: enter capture, same as the snip mode key.
     Copy,
+    /// Cancel binding. In capture: same as [`Self::Copy`]. Otherwise: unfreeze.
     Cancel,
     ResetZoom,
 }
