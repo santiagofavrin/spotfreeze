@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.24.0...v1.25.0) (2026-08-14)
+
+
+### Features
+
+* freeze toggle exits like Esc ([5605842](https://github.com/santiagofavrin/spotfreeze/commit/5605842e78add2a0c5ce13e5e6514a2f2880453d))
+
 ## [1.24.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.23.0...v1.24.0) (2026-08-14)
 
 
