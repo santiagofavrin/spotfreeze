@@ -127,13 +127,13 @@ single source of defaults; the store (`settings/store.rs`) only loads/saves.
 ## Finishing a task
 
 When a task is done and its changes are validated (build + `cargo test` +
-`cargo clippy` pass), **commit and push everything — leave no change behind.**
+`cargo clippy` pass), **commit everything — leave no change behind.**
 The working tree must be clean when you finish. Stage and commit all modified
 and new files, not just the ones directly tied to the task. Group them into
 logical Conventional Commits (e.g. a `fix:`/`feat:` for the work, a `chore:`
-for incidental tidy-ups, a `docs:` for doc-only changes) and push to the
-current branch. A `feat:`/`fix:` on `main` triggers the release-please PR as
-described above; `docs:`/`chore:` commits do not.
+for incidental tidy-ups, a `docs:` for doc-only changes). A `feat:`/`fix:` on
+`main` triggers the release-please PR as described above; `docs:`/`chore:`
+commits do not.
 
 The only exception: do not commit unrelated changes that are clearly a
 **regression** or something that is not supposed to be there (e.g. a stray
@@ -141,7 +141,9 @@ debug edit, a accidentally-reverted fix, build artifacts that should be
 git-ignored). If you are unsure whether an unrelated change belongs, ask
 before committing it. Otherwise, commit it.
 
-An ordinary commit + push of finished, validated work is expected, not
-optional. Still pause for explicit confirmation before genuinely
-hard-to-reverse or destructive actions (force-pushes, history rewrites,
-deleting untracked work).
+An ordinary commit of finished, validated work is expected, not optional.
+
+**Never push** (`git push`, force-push, or any other remote update) unless the
+user explicitly asks to push. Committing locally is not permission to push.
+Still pause for explicit confirmation before genuinely hard-to-reverse or
+destructive actions (force-pushes, history rewrites, deleting untracked work).
