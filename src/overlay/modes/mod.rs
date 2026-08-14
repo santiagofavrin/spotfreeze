@@ -17,8 +17,8 @@
 //!   [`ModeStack::enter_capture`]**: the controller RE-BASES the freeze on the
 //!   currently composited view (the spotlight/zoom effects active at that
 //!   moment baked in); the stack STASHES the spotlight/zoom layers and
-//!   activates a fresh snip layer for the drag-selection. The freeze-toggle
-//!   (and any other explicit exit) → [`ModeStack::exit_capture`]: the stashed
+//!   activates a fresh snip layer for the drag-selection. An explicit
+//!   capture-exit (e.g. toggling snip off) → [`ModeStack::exit_capture`]: the stashed
 //!   layers come back exactly as they were (spotlight on/off state, zoom
 //!   factor/focus) and the snip layer is dropped; the controller restores the
 //!   pre-capture base. Esc / Ctrl+C in capture copy and unfreeze instead.

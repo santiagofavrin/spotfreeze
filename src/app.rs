@@ -108,7 +108,8 @@ enum UpdateOutcome {
 ///    ([`crate::hotkeys::manager::HotkeyManager`]) and the tray icon
 ///    ([`crate::tray::TrayIcon`]).
 /// 5. **Global hotkeys** (re-registered after every settings save):
-///    * `freeze_toggle` (always active) → freeze/unfreeze;
+///    * `freeze_toggle` (always active) → freeze, or [`OverlayController::cancel`]
+///      while frozen (same as Esc);
 ///    * while frozen only: `mode_spotlight` → `OverlayController::toggle_mode`
 ///      (spotlight cycles shapes, then turns off on the last shape), `mode_snip` → `OverlayController::set_mode`
 ///      (enter capture mode, re-basing the freeze), plus `cancel` →
@@ -498,10 +499,14 @@ fn on_hotkey(state: &mut AppState, hwnd: HWND, wparam: WPARAM) {
     reconcile_frozen_state(state);
 }
 
-/// Freeze/unfreeze toggle on the global hotkey.
+/// Freeze/unfreeze toggle on the global hotkey. While frozen this is the
+/// same as Esc ([`OverlayController::cancel`]): copy + close in capture,
+/// otherwise unfreeze without copying.
 fn toggle_freeze(state: &mut AppState, hwnd: HWND) {
     if state.controller.is_frozen() {
-        state.controller.unfreeze();
+        if let Err(e) = state.controller.cancel(&state.services) {
+            show_error(Some(hwnd), &format!("Could not copy the snip:\n{e:#}"));
+        }
         reconcile_frozen_state(state);
     } else {
         freeze(state, hwnd);

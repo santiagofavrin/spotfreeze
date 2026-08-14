@@ -307,10 +307,14 @@ fn reload_settings(state: &Rc<RefCell<AppState>>) {
     s.rebind_freeze_hotkey_if_changed();
 }
 
-/// Freeze/unfreeze toggle on the global hotkey.
+/// Freeze/unfreeze toggle on the global hotkey. While frozen this is the
+/// same as Esc ([`OverlayController::cancel`]).
 fn toggle_freeze(state: &Rc<RefCell<AppState>>) {
     if state.borrow().controller.is_frozen() {
-        state.borrow_mut().controller.unfreeze();
+        let mut s = state.borrow_mut();
+        if let Err(e) = s.controller.cancel(&s.services) {
+            queue_alert(format!("Could not copy the snip:\n{e:#}"));
+        }
         return;
     }
     freeze_if_unfrozen(state);

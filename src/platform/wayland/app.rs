@@ -35,6 +35,7 @@ use crate::hotkeys::frozen::{
 use crate::hotkeys::gesture::HotkeyGesture;
 use crate::overlay::controller::OverlayController;
 use crate::overlay::modes::ModeKind;
+use crate::platform::PlatformServices;
 use crate::platform::shared::edit;
 use crate::platform::wayland::capture::WaylandCapturer;
 use crate::platform::wayland::clipboard::WaylandServices;
@@ -168,7 +169,7 @@ impl AppState {
     /// Freeze/unfreeze toggle (the portal hotkey's only job).
     fn toggle_freeze(&mut self) {
         if self.controller.is_frozen() {
-            unfreeze_syncing_plan(&mut self.controller, &self.frozen_plan);
+            cancel_syncing_plan(&mut self.controller, &self.frozen_plan, &self.services);
             return;
         }
         self.freeze_with_plan();
@@ -276,16 +277,19 @@ impl AppState {
     }
 }
 
-/// The unfreeze half of the freeze toggle: `unfreeze()` in capture mode only
-/// EXITS capture (the session stays frozen), so the frozen plan is cleared
-/// only when the session actually ended. Clearing it earlier would strand the
-/// still-frozen session: the key listener matches against this plan, so every
-/// frozen-mode key would go dead.
-fn unfreeze_syncing_plan(
+/// The unfreeze half of the freeze toggle: same as Esc
+/// ([`OverlayController::cancel`]). The frozen plan is cleared only when the
+/// session actually ended. Clearing it earlier would strand a still-frozen
+/// session: the key listener matches against this plan, so every frozen-mode
+/// key would go dead.
+fn cancel_syncing_plan(
     controller: &mut OverlayController,
     frozen_plan: &RefCell<Vec<FrozenRegistration>>,
+    services: &dyn PlatformServices,
 ) {
-    controller.unfreeze();
+    if let Err(e) = controller.cancel(services) {
+        eprintln!("spotfreeze: could not copy the snip: {e:#}");
+    }
     if !controller.is_frozen() {
         frozen_plan.borrow_mut().clear();
     }
@@ -585,7 +589,7 @@ mod tests {
     }
 
     #[test]
-    fn toggle_unfreeze_in_capture_keeps_the_plan_until_the_session_ends() {
+    fn toggle_unfreeze_in_capture_ends_the_session_like_esc() {
         let mut controller = frozen_controller();
         let plan = RefCell::new(plan_frozen_registrations(&AppSettings::default().hotkeys));
         assert!(!plan.borrow().is_empty());
@@ -593,21 +597,13 @@ mod tests {
         controller.set_mode(ModeKind::Snip, &FakeServices);
         assert!(controller.is_frozen(), "capture entry keeps the session");
 
-        // First toggle while in capture: only exits capture — the session
-        // stays frozen, so the plan must stay live for its keys.
-        unfreeze_syncing_plan(&mut controller, &plan);
+        // Toggle while in capture: same as Esc — copy + close. The session
+        // ends, so the plan dies with it.
+        cancel_syncing_plan(&mut controller, &plan, &FakeServices);
         assert!(
-            controller.is_frozen(),
-            "unfreeze in capture only exits capture"
+            !controller.is_frozen(),
+            "freeze-toggle in capture must exit like Esc"
         );
-        assert!(
-            !plan.borrow().is_empty(),
-            "the plan must survive while the session is frozen"
-        );
-
-        // Second toggle: the session really ends and the plan dies with it.
-        unfreeze_syncing_plan(&mut controller, &plan);
-        assert!(!controller.is_frozen());
         assert!(plan.borrow().is_empty(), "the plan dies with the session");
     }
 }

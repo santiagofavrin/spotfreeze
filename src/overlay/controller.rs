@@ -32,8 +32,9 @@
 //!   rectangle stays COMPLETELY CLEAR (the un-dimmed base) behind a crisp
 //!   two-tone border. Esc in capture mode is the same as Ctrl+C: copy the
 //!   selection (or the focused monitor) and unfreeze. Esc outside capture
-//!   unfreezes without copying. The freeze-toggle still only EXITS capture
-//!   via [`unfreeze`] / [`exit_capture`], restoring the pre-capture view.
+//!   unfreezes without copying. The freeze-toggle uses the same [`cancel`]
+//!   path. [`unfreeze`] still only EXITS capture via [`exit_capture`] (used
+//!   by capture-off helpers, not by Esc or the freeze-toggle).
 //! - **Rendering**: every repaint composes the full frame via
 //!   [`crate::overlay::composite::compose_frame`] with a
 //!   [`crate::overlay::composite::RenderState`] built from the active layers
@@ -309,7 +310,7 @@ impl OverlayController {
     /// Tear the session down, or — when already in capture — only EXIT
     /// capture: the pre-capture originals and the stashed spotlight/zoom
     /// state are restored (the re-frozen base is dropped) and the session
-    /// stays frozen. Used by the freeze-toggle. The Esc binding goes through
+    /// stays frozen. The Esc binding and the freeze-toggle go through
     /// [`cancel`](Self::cancel) instead. No-op when not frozen.
     pub fn unfreeze(&mut self) {
         {

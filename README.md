@@ -79,7 +79,7 @@ screen is frozen.
 
 | Action | Default | Scope |
 | --- | --- | --- |
-| Toggle screen freeze | `Alt+Backtick` | Global — works from any app (in capture mode it backs out of capture first) |
+| Toggle screen freeze | `Alt+Backtick` | Global — works from any app; while frozen, same as `Esc` |
 | Spotlight toggle / cycle shape | `S` | While frozen — cycles the spotlight shape (Circle → Diamond → Star → RoundedRect → Rectangle) then turns it off on the last shape; pressing again brings it back at the starting shape |
 | Capture mode | `C` | While frozen — re-freezes with the current effects baked in (persistent accent frame + lighter veil) |
 | Zoom in / out | `Shift` + mouse wheel | While frozen — in all modes; adds the zoom layer on the spot if it isn't active yet, drops it back at 1.0× |
@@ -95,8 +95,8 @@ color dark slate (`#16283A`), zoom step `1.25` (min `1.0`, max `16.0`).
 Freezing starts with the spotlight on. `Esc` unfreezes from spotlight mode
 (on or off). In capture mode, `Esc` and `Ctrl+C` both copy the selection
 (or the focused monitor) to the clipboard and unfreeze. Outside capture,
-`Ctrl+C` enters capture mode (same as `C`). The freeze-toggle still backs
-out of capture first without copying.
+`Ctrl+C` enters capture mode (same as `C`). The freeze-toggle is the same
+as `Esc` while frozen.
 
 Freezing and unfreezing are instant — no fade, no animation. The overlay
 appears at full strength (veil, spotlight circle, legend all settled from
