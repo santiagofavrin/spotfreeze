@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.23.0...v1.24.0) (2026-08-14)
+
+
+### Features
+
+* Esc copies in capture, Ctrl+C enters it ([987e137](https://github.com/santiagofavrin/spotfreeze/commit/987e137783e4c7f871d61a37f794700ecef0fa44))
+
 ## [1.23.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.22.0...v1.23.0) (2026-08-13)
 
 
