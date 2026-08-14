@@ -3,19 +3,96 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-case "${1:-help}" in
-build)
-    cargo build --release --manifest-path "$ROOT/Cargo.toml"
-    echo "Binary: $ROOT/target/release/spotfreeze"
-    ;;
-spotfreeze)
-    exec "$ROOT/target/release/spotfreeze" "${@:2}"
-    ;;
-*)
+host_os() {
+    case "$(uname -s)" in
+        Linux*) echo linux ;;
+        Darwin*) echo macos ;;
+        MINGW* | MSYS* | CYGWIN*) echo windows ;;
+        *) echo unknown ;;
+    esac
+}
+
+run_linux_tests() {
+    echo "==> linux (docker)"
+    docker compose -f "$ROOT/docker-compose.yml" --project-directory "$ROOT" \
+        run --rm --build test
+}
+
+run_native_tests() {
+    local os="$1"
+    echo "==> $os (native cargo test)"
+    cargo test --locked --manifest-path "$ROOT/Cargo.toml"
+}
+
+require_host() {
+    local want="$1"
+    local have
+    have="$(host_os)"
+    if [[ "$have" != "$want" ]]; then
+        echo "bin/run: $want tests must run on $want (this host is $have)." >&2
+        echo "Linux is the Docker suite; Windows and macOS run on that OS or in CI." >&2
+        exit 1
+    fi
+}
+
+run_tests() {
+    local scope="${1:-all}"
+    case "$scope" in
+        all)
+            local have
+            have="$(host_os)"
+            run_linux_tests
+            case "$have" in
+                windows | macos) run_native_tests "$have" ;;
+            esac
+            ;;
+        linux)
+            run_linux_tests
+            ;;
+        macos)
+            require_host macos
+            run_native_tests macos
+            ;;
+        windows)
+            require_host windows
+            run_native_tests windows
+            ;;
+        *)
+            echo "Unknown test scope: $scope" >&2
+            echo "Usage: bin/run test [all|linux|macos|windows]" >&2
+            exit 1
+            ;;
+    esac
+}
+
+usage() {
     echo "Usage: bin/run <command> [args...]"
     echo ""
     echo "Commands:"
-    echo "  build       Build the release binary"
-    echo "  spotfreeze  Run spotfreeze (passes through extra args)"
-    ;;
+    echo "  build                 Build the release binary"
+    echo "  spotfreeze            Run spotfreeze (passes through extra args)"
+    echo "  test [all|linux|macos|windows]"
+    echo "                        Run the headless suite. Default: all."
+    echo "                        linux uses Docker; macos/windows run natively"
+    echo "                        on that OS (not in Linux Docker)."
+}
+
+case "${1:-help}" in
+    build)
+        cargo build --release --manifest-path "$ROOT/Cargo.toml"
+        echo "Binary: $ROOT/target/release/spotfreeze"
+        ;;
+    spotfreeze)
+        exec "$ROOT/target/release/spotfreeze" "${@:2}"
+        ;;
+    test)
+        run_tests "${2:-all}"
+        ;;
+    help | -h | --help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 1
+        ;;
 esac

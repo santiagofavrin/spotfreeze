@@ -351,8 +351,12 @@ packaging/macos/build-app.sh target/release/spotfreeze 0.1.0
 
 ## Test
 
-```powershell
-cargo test
+```bash
+bin/run test           # all runnable suites (Linux via Docker)
+bin/run test linux     # Linux headless suite in Docker
+bin/run test macos     # native cargo test (macOS host only)
+bin/run test windows   # native cargo test (Windows host only)
+cargo test             # same suite, current host, no Docker
 ```
 
 The whole suite is headless and safe to run on a live desktop on all three
@@ -360,7 +364,8 @@ OSes: all logic (pixel compositing, geometry, hotkey parsing, settings
 round-trips) is decoupled from the platform APIs into pure functions. Tests
 open no windows, register no hotkeys, and never touch the real clipboard or
 screen. Platform-specific tests run on their CI runners (Windows, Linux via
-Docker, macOS).
+Docker, macOS). `bin/run test macos` / `windows` need that OS — they cannot
+run inside Linux Docker.
 
 ## Release process
 

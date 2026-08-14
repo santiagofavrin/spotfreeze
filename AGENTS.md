@@ -19,6 +19,10 @@ cargo test --lib          # unit tests only
 cargo test --test legend  # one integration scenario
 cargo fmt                 # format
 cargo clippy              # lint (treat warnings as errorsome — fix them)
+bin/run test              # all runnable suites (Linux via Docker)
+bin/run test linux        # Linux headless suite in Docker
+bin/run test macos        # native cargo test (macOS host only)
+bin/run test windows      # native cargo test (Windows host only)
 ```
 
 Linux Docker equivalents (no local toolchain needed):
