@@ -5,10 +5,13 @@
 //! Mirrors the Windows `app` module's structure with the documented platform
 //! differences:
 //!
-//! - **Intents, not window messages**: the portal hotkey (compositor-level,
-//!   works while frozen) and the tray callbacks fire on their own threads and
-//!   post `Intent`s over a `calloop::channel`; the event loop applies them
-//!   on the main thread, where everything else runs.
+//! - **Intents, not window messages**: the portal hotkey (compositor-level)
+//!   and the tray callbacks fire on their own threads and post `Intent`s over
+//!   a `calloop::channel`; the event loop applies them on the main thread.
+//!   While frozen, some compositors deliver the freeze chord to the exclusive
+//!   overlay instead of the portal — the overlay key listener therefore also
+//!   matches `freeze_toggle` and posts `Intent::ToggleFreeze`. A short
+//!   debounce collapses a portal Activation and that KeyDown into one toggle.
 //! - **Frozen-mode keys**: while frozen, keys arrive through the focused
 //!   overlay surface (EXCLUSIVE keyboard interactivity), not as global
 //!   hotkeys. The input module forwards every `KeyDown` to a key listener,
@@ -52,6 +55,7 @@ use calloop::{EventLoop, Interest, Mode, PostAction};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 /// Cross-thread intents into the event loop (portal hotkey, tray menu, and
 /// the frozen-mode key listener all converge here).
@@ -80,6 +84,23 @@ enum Intent {
     Frozen(FrozenAction),
 }
 
+/// Portal Activation and overlay KeyDown of the same press can both arrive.
+/// Ignore the second so a successful unfreeze is not immediately re-frozen.
+const TOGGLE_DEBOUNCE: Duration = Duration::from_millis(80);
+
+/// Overlay KeyDown while frozen: the freeze-toggle exits (same as the portal
+/// hotkey); otherwise the freeze-time plan.
+fn match_overlay_key(
+    plan: &[FrozenRegistration],
+    freeze_toggle: HotkeyGesture,
+    gesture: HotkeyGesture,
+) -> Option<Intent> {
+    if gesture == freeze_toggle {
+        return Some(Intent::ToggleFreeze);
+    }
+    match_frozen_key(plan, gesture).map(Intent::Frozen)
+}
+
 /// Whole application state; owned by [`run`]'s stack frame for the lifetime
 /// of the event loop.
 struct AppState {
@@ -97,6 +118,13 @@ struct AppState {
     /// Frozen-mode plan, computed at every freeze from the current settings;
     /// shared with the key listener, empty while unfrozen.
     frozen_plan: Rc<RefCell<Vec<FrozenRegistration>>>,
+    /// Live freeze-toggle gesture, shared with the overlay key listener so a
+    /// second press can exit even when the compositor delivers the chord to
+    /// the exclusive overlay instead of the portal.
+    freeze_toggle: Rc<RefCell<HotkeyGesture>>,
+    /// Collapse a portal Activation and the overlay KeyDown of the same press
+    /// into one toggle (otherwise: unfreeze, then immediately freeze again).
+    last_toggle_at: Option<Instant>,
     update_available: Option<String>,
     exiting: bool,
 }
@@ -166,8 +194,16 @@ impl AppState {
         }
     }
 
-    /// Freeze/unfreeze toggle (the portal hotkey's only job).
+    /// Freeze/unfreeze toggle (portal hotkey, and the overlay key path when
+    /// the compositor delivers the chord to the exclusive surface).
     fn toggle_freeze(&mut self) {
+        let now = Instant::now();
+        if let Some(prev) = self.last_toggle_at
+            && now.duration_since(prev) < TOGGLE_DEBOUNCE
+        {
+            return;
+        }
+        self.last_toggle_at = Some(now);
         if self.controller.is_frozen() {
             cancel_syncing_plan(&mut self.controller, &self.frozen_plan, &self.services);
             return;
@@ -274,6 +310,7 @@ impl AppState {
             }
         }
         self.settings = reloaded;
+        *self.freeze_toggle.borrow_mut() = self.settings.hotkeys.freeze_toggle;
     }
 }
 
@@ -336,6 +373,7 @@ pub fn run() -> Result<()> {
     let mut event_loop: EventLoop<AppState> =
         EventLoop::try_new().context("creating the calloop event loop")?;
     let (intent_tx, intent_rx) = channel::channel::<Intent>();
+    let freeze_toggle = settings.hotkeys.freeze_toggle;
 
     let mut state = AppState {
         settings,
@@ -347,6 +385,8 @@ pub fn run() -> Result<()> {
         portal: None,
         tray: None,
         frozen_plan: Rc::new(RefCell::new(Vec::new())),
+        freeze_toggle: Rc::new(RefCell::new(freeze_toggle)),
+        last_toggle_at: None,
         update_available: None,
         exiting: false,
     };
@@ -429,15 +469,20 @@ pub fn run() -> Result<()> {
         }
     };
 
-    // Frozen-mode key routing: the input module reports every KeyDown here;
-    // match the freeze-time plan and post the action.
+    // Frozen-mode key routing: the input module reports every KeyDown here.
+    // Match the freeze toggle first (so a second press exits even when the
+    // compositor delivered the chord to the exclusive overlay), then the
+    // freeze-time plan.
     state.shell.set_key_listener({
         let plan = state.frozen_plan.clone();
+        let freeze_toggle = state.freeze_toggle.clone();
         let tx = intent_tx.clone();
         Rc::new(move |vk, modifiers| {
             let gesture = HotkeyGesture::new(modifiers, vk);
-            if let Some(action) = match_frozen_key(&plan.borrow(), gesture) {
-                let _ = tx.send(Intent::Frozen(action));
+            if let Some(intent) =
+                match_overlay_key(&plan.borrow(), *freeze_toggle.borrow(), gesture)
+            {
+                let _ = tx.send(intent);
             }
         })
     });
@@ -605,5 +650,45 @@ mod tests {
             "freeze-toggle in capture must exit like Esc"
         );
         assert!(plan.borrow().is_empty(), "the plan dies with the session");
+    }
+
+    fn gesture(s: &str) -> HotkeyGesture {
+        HotkeyGesture::parse(s).unwrap()
+    }
+
+    #[test]
+    fn overlay_key_treats_the_freeze_toggle_as_toggle_even_in_spotlight() {
+        let settings = AppSettings::default();
+        let plan = plan_frozen_registrations(&settings.hotkeys);
+        let intent = match_overlay_key(
+            &plan,
+            settings.hotkeys.freeze_toggle,
+            gesture("Alt+Backtick"),
+        );
+        assert!(
+            matches!(intent, Some(Intent::ToggleFreeze)),
+            "second freeze-toggle press must exit, not be ignored"
+        );
+    }
+
+    #[test]
+    fn overlay_key_still_routes_frozen_plan_gestures() {
+        let settings = AppSettings::default();
+        let plan = plan_frozen_registrations(&settings.hotkeys);
+        let intent = match_overlay_key(&plan, settings.hotkeys.freeze_toggle, gesture("Esc"));
+        assert!(matches!(intent, Some(Intent::Frozen(FrozenAction::Cancel))));
+        assert!(match_overlay_key(&plan, settings.hotkeys.freeze_toggle, gesture("F1")).is_none());
+    }
+
+    #[test]
+    fn overlay_key_prefers_freeze_toggle_over_a_conflicting_plan_entry() {
+        // Hand-edited config: freeze toggle equals Esc. The overlay must
+        // still treat that press as the session toggle, not only Cancel.
+        let toggle = gesture("Esc");
+        let plan = plan_frozen_registrations(&AppSettings::default().hotkeys);
+        assert!(matches!(
+            match_overlay_key(&plan, toggle, toggle),
+            Some(Intent::ToggleFreeze)
+        ));
     }
 }
