@@ -312,7 +312,15 @@ fn reload_settings(state: &Rc<RefCell<AppState>>) {
 fn toggle_freeze(state: &Rc<RefCell<AppState>>) {
     if state.borrow().controller.is_frozen() {
         let mut s = state.borrow_mut();
-        if let Err(e) = s.controller.cancel(&s.services) {
+        // Split the RefMut into disjoint field borrows (same as the tray
+        // mode calls): `RefMut` itself cannot be borrowed mutably and
+        // immutably at once.
+        let AppState {
+            controller,
+            services,
+            ..
+        } = &mut *s;
+        if let Err(e) = controller.cancel(services) {
             queue_alert(format!("Could not copy the snip:\n{e:#}"));
         }
         return;
