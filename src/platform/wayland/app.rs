@@ -10,8 +10,9 @@
 //!   a `calloop::channel`; the event loop applies them on the main thread.
 //!   While frozen, some compositors deliver the freeze chord to the exclusive
 //!   overlay instead of the portal — the overlay key listener therefore also
-//!   matches `freeze_toggle` and posts `Intent::ToggleFreeze`. A short
-//!   debounce collapses a portal Activation and that KeyDown into one toggle.
+//!   matches `freeze_toggle` and posts `Intent::ToggleFreeze`. After an
+//!   overlay unfreeze, a short suppress window ignores a late portal
+//!   Activation so it cannot immediately re-freeze.
 //! - **Frozen-mode keys**: while frozen, keys arrive through the focused
 //!   overlay surface (EXCLUSIVE keyboard interactivity), not as global
 //!   hotkeys. The input module forwards every `KeyDown` to a key listener,
@@ -84,9 +85,33 @@ enum Intent {
     Frozen(FrozenAction),
 }
 
-/// Portal Activation and overlay KeyDown of the same press can both arrive.
-/// Ignore the second so a successful unfreeze is not immediately re-frozen.
-const TOGGLE_DEBOUNCE: Duration = Duration::from_millis(80);
+/// Overlay KeyDown can unfreeze before the portal's Activation for the same
+/// press arrives over D-Bus. Ignore a follow-up freeze so the session stays
+/// closed. Long enough for a slow portal; short enough to re-freeze on purpose.
+const REARM_SUPPRESS: Duration = Duration::from_millis(400);
+
+/// What a freeze-toggle press should do given session state and the suppress
+/// window from the previous unfreeze.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ToggleDecision {
+    Freeze,
+    Unfreeze,
+    Ignore,
+}
+
+fn decide_toggle(
+    frozen: bool,
+    now: Instant,
+    suppress_rearm_until: Option<Instant>,
+) -> ToggleDecision {
+    if frozen {
+        return ToggleDecision::Unfreeze;
+    }
+    if suppress_rearm_until.is_some_and(|until| now < until) {
+        return ToggleDecision::Ignore;
+    }
+    ToggleDecision::Freeze
+}
 
 /// Overlay KeyDown while frozen: the freeze-toggle exits (same as the portal
 /// hotkey); otherwise the freeze-time plan.
@@ -122,9 +147,8 @@ struct AppState {
     /// second press can exit even when the compositor delivers the chord to
     /// the exclusive overlay instead of the portal.
     freeze_toggle: Rc<RefCell<HotkeyGesture>>,
-    /// Collapse a portal Activation and the overlay KeyDown of the same press
-    /// into one toggle (otherwise: unfreeze, then immediately freeze again).
-    last_toggle_at: Option<Instant>,
+    /// After an unfreeze, ignore a late portal Activation that would re-arm.
+    suppress_rearm_until: Option<Instant>,
     update_available: Option<String>,
     exiting: bool,
 }
@@ -197,18 +221,18 @@ impl AppState {
     /// Freeze/unfreeze toggle (portal hotkey, and the overlay key path when
     /// the compositor delivers the chord to the exclusive surface).
     fn toggle_freeze(&mut self) {
-        let now = Instant::now();
-        if let Some(prev) = self.last_toggle_at
-            && now.duration_since(prev) < TOGGLE_DEBOUNCE
-        {
-            return;
+        match decide_toggle(
+            self.controller.is_frozen(),
+            Instant::now(),
+            self.suppress_rearm_until,
+        ) {
+            ToggleDecision::Ignore => {}
+            ToggleDecision::Unfreeze => {
+                cancel_syncing_plan(&mut self.controller, &self.frozen_plan, &self.services);
+                self.suppress_rearm_until = Some(Instant::now() + REARM_SUPPRESS);
+            }
+            ToggleDecision::Freeze => self.freeze_with_plan(),
         }
-        self.last_toggle_at = Some(now);
-        if self.controller.is_frozen() {
-            cancel_syncing_plan(&mut self.controller, &self.frozen_plan, &self.services);
-            return;
-        }
-        self.freeze_with_plan();
     }
 
     /// The freeze half of the toggle: reload settings, freeze into Spotlight
@@ -386,7 +410,7 @@ pub fn run() -> Result<()> {
         tray: None,
         frozen_plan: Rc::new(RefCell::new(Vec::new())),
         freeze_toggle: Rc::new(RefCell::new(freeze_toggle)),
-        last_toggle_at: None,
+        suppress_rearm_until: None,
         update_available: None,
         exiting: false,
     };
@@ -690,5 +714,26 @@ mod tests {
             match_overlay_key(&plan, toggle, toggle),
             Some(Intent::ToggleFreeze)
         ));
+    }
+
+    #[test]
+    fn decide_toggle_unfreezes_while_frozen_even_inside_the_suppress_window() {
+        let now = Instant::now();
+        let suppress = Some(now + Duration::from_secs(1));
+        assert_eq!(decide_toggle(true, now, suppress), ToggleDecision::Unfreeze);
+    }
+
+    #[test]
+    fn decide_toggle_ignores_a_late_rearm_after_unfreeze() {
+        let now = Instant::now();
+        assert_eq!(
+            decide_toggle(false, now, Some(now + Duration::from_millis(400))),
+            ToggleDecision::Ignore
+        );
+        assert_eq!(
+            decide_toggle(false, now, Some(now - Duration::from_millis(1))),
+            ToggleDecision::Freeze
+        );
+        assert_eq!(decide_toggle(false, now, None), ToggleDecision::Freeze);
     }
 }
