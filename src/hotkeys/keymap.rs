@@ -446,8 +446,11 @@ pub fn vk_to_xkb(vk: u32) -> Option<u32> {
 /// the lowercase table rows.
 pub fn xkb_to_vk(keysym: u32) -> Option<u32> {
     // XK_A..XK_Z equal the uppercase ASCII codes; the table holds lowercase.
+    // Dead-grave is what many layouts emit for the backtick key; treat it as
+    // the same physical key as XK_grave so Alt+Backtick still matches.
     let keysym = match keysym {
         0x41..=0x5A => keysym + 0x20,
+        0xFE50 => 0x0060, // XK_dead_grave → XK_grave
         _ => keysym,
     };
     KEY_MAP.iter().find(|e| e.xkb == keysym).map(|e| e.vk)
@@ -548,6 +551,7 @@ mod tests {
         assert_eq!(vk_to_xkb(0x70), Some(0xFFBE)); // VK_F1 -> XK_F1
         assert_eq!(vk_to_xkb(0x2E), Some(0xFFFF)); // VK_DELETE -> XK_Delete
         assert_eq!(vk_to_xkb(0xC0), Some(0x0060)); // VK_OEM_3 -> XK_grave
+        assert_eq!(xkb_to_vk(0xFE50), Some(0xC0)); // XK_dead_grave -> VK_OEM_3
         // HIToolbox Events.h.
         assert_eq!(vk_to_cg_keycode(0x41), Some(0x00)); // 'A' -> kVK_ANSI_A
         assert_eq!(vk_to_cg_keycode(0x0D), Some(0x24)); // VK_RETURN -> kVK_Return

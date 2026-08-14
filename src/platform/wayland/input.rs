@@ -26,7 +26,9 @@
 //!   pressed whose keymap entry repeats is not re-emitted.
 //! - Modifiers come from `wl_keyboard.modifiers` through xkb state
 //!   (`XKB_STATE_MODS_EFFECTIVE`; Shift/Ctrl/Mod1=Alt/Mod4=Super→Win) and ride
-//!   along with every `KeyDown`/`MouseWheel` event.
+//!   along with every `KeyDown`/`MouseWheel` event. `key_pressed` also
+//!   re-reads the effective mask after `xkb_state_update_key`, because a Key
+//!   event can arrive before the matching Modifiers event.
 //!
 //! # Serials and cursor
 //!
@@ -457,6 +459,9 @@ impl InputState {
         let is_repeat = self.pressed.contains(&key) && xkb.key_repeats(key);
         xkb.update_key(key, xkb_key_direction::XKB_KEY_DOWN);
         self.pressed.insert(key);
+        // Refresh from xkb: compositors often deliver Key before Modifiers,
+        // so the cached bits can still be empty while Alt is already down.
+        self.modifiers = xkb.modifiers();
         if is_repeat {
             return; // suppress auto-repeat re-emission
         }
