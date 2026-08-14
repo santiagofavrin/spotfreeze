@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.25.2](https://github.com/santiagofavrin/spotfreeze/compare/v1.25.1...v1.25.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* exit freeze from overlay toggle on Linux ([66240be](https://github.com/santiagofavrin/spotfreeze/commit/66240be640dcbfc19ef4a03962a00ce26056ad2c))
+* ignore late portal re-freeze on Linux ([d5485c6](https://github.com/santiagofavrin/spotfreeze/commit/d5485c62b757d89bf8e3541591ba698039fdb830))
+* match Alt+Backtick before modifier events ([f4819d5](https://github.com/santiagofavrin/spotfreeze/commit/f4819d5dfbc28dd0979693eda3d04a826048e80b))
+
 ## [1.25.1](https://github.com/santiagofavrin/spotfreeze/compare/v1.25.0...v1.25.1) (2026-08-14)
 
 
