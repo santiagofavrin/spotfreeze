@@ -92,9 +92,11 @@ and macOS 14+ (Apple Silicon) from one codebase, keeping the project's
 identity: single native binary, no GUI framework, pure-logic core fully
 unit-tested headless.
 
-Key decisions (user-approved): settings on Linux/macOS are JSONC-file only
+Key decisions (user-approved): settings on Linux are JSONC-file only
 (tray "Edit settings" opens the file in the default editor; changes apply on
-next freeze); the Linux global hotkey uses the XDG GlobalShortcuts portal
+next freeze); macOS got a native settings window on par with Windows
+(press-to-rebind Set/Default buttons on every hotkey row); the Linux global
+hotkey uses the XDG GlobalShortcuts portal
 (rebindable from `spotfreeze.jsonc`, requires `xdg-desktop-portal-hyprland` on
 Hyprland); Docker covers Linux builds + headless tests, while macOS/Windows
 build on CI runners.
@@ -139,6 +141,6 @@ build on CI runners.
 
 ### Non-goals (v1)
 
-Native settings windows on Linux/macOS · X11 session support · macOS Intel
+A native settings window on Linux · X11 session support · macOS Intel
 builds · IPC CLI toggle · musl static binaries · Apple notarization · Windows
 behavior changes beyond the Stage-1 seam refactor.

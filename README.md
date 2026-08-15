@@ -38,9 +38,11 @@ re-composited from reusable buffers — never a full repaint from scratch.
   anti-aliased vector text from the embedded Inter typeface (SIL OFL 1.1).
 - **Customizable overlay** — set the dim-veil color and opacity, plus a
   separate, lighter veil color and opacity for capture mode.
-- **Every hotkey is rebindable**, with conflict validation. On Windows the
-  built-in settings window captures whatever you press — including `Win`+key
-  combinations; on Linux/macOS you edit the binding strings in `spotfreeze.jsonc`
+- **Every hotkey is rebindable**, with conflict validation. The settings
+  window (Windows/macOS) rebinds by pressing: each binding row's **Set** button
+  captures the next key combination you press (including `Win`+key combos on
+  Windows and `Cmd` chords on macOS) and its **Default** button restores the
+  factory binding; on Linux you edit the binding strings in `spotfreeze.jsonc`
   (same gesture syntax, e.g. `Alt+Backtick` or `Win+F`).
 - **Tray-based** — no window until you ask for one. Click the tray icon with
   either mouse button for the menu: *Spotlight* and *Screenshot* (one-click
@@ -51,12 +53,11 @@ re-composited from reusable buffers — never a full repaint from scratch.
 
 ### Platform notes
 
-- **Linux and macOS** — settings are edited as text: the tray menu's *Edit
-  settings* (*Edit Settings…* on macOS) opens `spotfreeze.jsonc` in your default
-  editor. Changes apply on the next freeze, or immediately via the tray's
-  *Reload settings* (*Reload Settings* on macOS) — that also re-registers a
-  changed freeze binding on the spot. There is no graphical settings window on
-  these platforms.
+- **Linux** — settings are edited as text: the tray menu's *Edit settings*
+  opens `spotfreeze.jsonc` in your default editor. Changes apply on the next
+  freeze, or immediately via the tray's *Reload settings* — that also
+  re-registers a changed freeze binding on the spot. There is no graphical
+  settings window on this platform.
 - **Linux (Wayland)** — on Hyprland, bind a mode hotkey in `hyprland.conf`
   (see *Install*): `bind = SUPER, F, exec, spotfreeze --spotlight`. On KDE/GNOME the
   XDG GlobalShortcuts portal is used instead (Hyprland also supports the portal,
@@ -69,12 +70,15 @@ re-composited from reusable buffers — never a full repaint from scratch.
   the Screen Recording permission: the first freeze prompts you to grant it in
   System Settings → Privacy & Security → Screen Recording. No Accessibility
   permission is needed — the global hotkey uses Carbon's
-  `RegisterEventHotKey`. Exiting keeps the Yes/No confirmation dialog.
+  `RegisterEventHotKey`. Settings are edited in the native settings window
+  (tray *Settings…*); *Open Settings Folder* reveals `spotfreeze.jsonc` for
+  hand edits, applied on the next freeze or immediately via *Reload Settings*.
+  Exiting keeps the Yes/No confirmation dialog.
 
 ## Default hotkeys
 
-All bindings can be changed — in the settings window on Windows, in
-`spotfreeze.jsonc` on Linux/macOS. Mode-specific keys are only active while the
+All bindings can be changed — in the settings window on Windows and macOS, in
+`spotfreeze.jsonc` on Linux. Mode-specific keys are only active while the
 screen is frozen.
 
 | Action | Default | Scope |
@@ -212,8 +216,9 @@ freeze hotkey.
 On **Windows**, **left-click the tray icon** (or right-click → *Settings*) to
 open the settings window. From there you can:
 
-- Rebind every hotkey by pressing the new key combination — including
-  `Win`+key combos; conflicting bindings are rejected.
+- Rebind every hotkey by pressing the new key combination — click **Set**
+  next to a binding and press it (including `Win`+key combos); **Default**
+  restores the factory binding. Conflicting bindings are rejected.
 - Adjust the spotlight radius, dim-veil opacity, and zoom limits.
 - **Customize the overlay color** — pick a color with the color picker or type
   a `#RRGGBB` hex value. The veil outside spotlight/selection areas is drawn
@@ -222,11 +227,19 @@ open the settings window. From there you can:
   current-user Run registry key; no admin rights needed).
 - Exit via right-click → *Exit* (a Yes/No confirmation prevents accidents).
 
-On **Linux and macOS** there is no settings window: choose *Edit settings*
-(*Edit Settings…* on macOS) in the tray menu to open `spotfreeze.jsonc` in your
-default editor and save — the same options (hotkeys, spotlight radius, veil
-color/opacity, zoom limits) are keys in the file. Exiting from the tray needs
-no confirmation on Linux; macOS keeps the Yes/No dialog.
+On **macOS**, choose *Settings…* in the tray menu for the native settings
+window — every hotkey is rebound by pressing it (**Set** captures the next
+chord you press, including `Cmd` chords; **Default** restores the factory
+binding), plus spotlight radius, veil color/opacity, zoom limits, the
+mode-legend toggle, and auto-start. *Open Settings Folder* reveals
+`spotfreeze.jsonc` in Finder for hand edits — a changed file applies on the
+next freeze, or immediately via *Reload Settings*.
+
+On **Linux** there is no settings window: choose *Edit settings* in the tray
+menu to open `spotfreeze.jsonc` in your default editor and save — the same
+options (hotkeys, spotlight radius, veil color/opacity, zoom limits) are keys
+in the file. Exiting from the tray needs no confirmation on Linux; macOS keeps
+the Yes/No dialog.
 
 `auto_start` (Windows/macOS only, default `false`) launches SpotFreeze at
 login: on Windows via the current-user Run registry key, on macOS via a
