@@ -412,11 +412,12 @@ fn tray_screenshot(state: &Rc<RefCell<AppState>>) {
     controller.set_mode(ModeKind::Snip, services);
 }
 
-/// "Settings…": open the native settings window. `run_modal` pumps its own
-/// modal loop, so NO `AppState` borrow may be held across the call (module
-/// docs): the current settings and path are cloned out first, the borrow is
-/// dropped, and the window runs. On Save, persist and apply exactly like the
-/// Windows shell's `apply_saved_settings`/`apply_new_settings` flow.
+/// "Settings…": open the native settings window. The window is non-modal
+/// and delivers its outcome through a callback (module docs: no `AppState`
+/// borrow is ever held across it): the current settings and path are cloned
+/// out, the borrow is dropped, and the window runs. On Save, persist and
+/// apply exactly like the Windows shell's `apply_saved_settings` /
+/// `apply_new_settings` flow.
 fn open_settings(state: &Rc<RefCell<AppState>>) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -425,7 +426,27 @@ fn open_settings(state: &Rc<RefCell<AppState>>) {
         let s = state.borrow();
         (s.settings.clone(), s.settings_path.clone())
     };
-    let Some(new_settings) = settings_window::run_modal(mtm, &current) else {
+    let state_on_done = Rc::clone(state);
+    let current_on_done = current.clone();
+    settings_window::open(
+        mtm,
+        &current,
+        Box::new(move |outcome| {
+            apply_saved_settings(state_on_done, path, current_on_done, outcome)
+        }),
+    );
+}
+
+/// Persist and apply the settings window's outcome (Save only; Cancel and
+/// the close button deliver `None` and change nothing). Runs on the main
+/// thread from the window's close cycle, with no `AppState` borrow held.
+fn apply_saved_settings(
+    state: Rc<RefCell<AppState>>,
+    path: PathBuf,
+    current: AppSettings,
+    outcome: Option<AppSettings>,
+) {
+    let Some(new_settings) = outcome else {
         return; // cancelled / closed: nothing to do
     };
     if let Err(e) = store::save(&path, &new_settings) {

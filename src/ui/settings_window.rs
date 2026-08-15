@@ -2,8 +2,9 @@
 //! modern system-settings panel: a light neutral window background, one
 //! rounded white card per section, a three-level font hierarchy, and the
 //! accent color reserved for the primary Save action. One row per rebindable
-//! hotkey with a capture button, conflict validation, Save/Cancel, and an
-//! Exit button whose confirmation the APP owns. Win32-only module.
+//! hotkey with a press-to-capture **Set** button and a **Default** button,
+//! conflict validation, Save/Cancel, and an Exit button whose confirmation
+//! the APP owns. Win32-only module.
 //!
 //! # Implementation notes
 //!
@@ -140,6 +141,7 @@ pub fn open(
         callbacks,
         gesture_edits: [HWND::default(); GESTURE_ROW_COUNT],
         rebind_buttons: [HWND::default(); GESTURE_ROW_COUNT],
+        default_buttons: [HWND::default(); GESTURE_ROW_COUNT],
         zoom_checks: [HWND::default(); MOD_CHECK_COUNT],
         numeric_edits: [HWND::default(); NUMERIC_FIELD_COUNT],
         color_swatch: HWND::default(),
@@ -270,6 +272,11 @@ impl GestureField {
             Self::Cancel => hotkeys.cancel = gesture,
             Self::ResetZoom => hotkeys.reset_zoom = gesture,
         }
+    }
+
+    /// The factory binding of this row ("Default" button).
+    fn default_gesture(self) -> HotkeyGesture {
+        self.get(&HotkeySettings::default())
     }
 }
 
@@ -670,8 +677,10 @@ fn card_brush() -> HBRUSH {
 }
 
 // Child-control IDs (travel in the low word of WM_COMMAND's wParam).
-const ID_REBIND_BASE: i32 = 100; // + gesture row index
+const ID_REBIND_BASE: i32 = 100; // + gesture row index ("Set")
+const ID_DEFAULT_BASE: i32 = 110; // + gesture row index ("Default")
 const ID_ZOOM_CHECK_BASE: i32 = 340; // + modifier index
+const ID_ZOOM_DEFAULT: i32 = 349;
 const ID_NUMERIC_BASE: i32 = 400; // + numeric field index
 const ID_COLOR_HEX: i32 = 450;
 const ID_COLOR_SWATCH: i32 = 451;
@@ -711,8 +720,9 @@ const GAP: i32 = 8;
 const SMALL_GAP: i32 = 4;
 const LABEL_W: i32 = 250;
 const GESTURE_EDIT_W: i32 = 130;
-const REBIND_BTN_W: i32 = 84;
-const MOD_LABEL_W: i32 = 200;
+const REBIND_BTN_W: i32 = 48;
+const DEFAULT_BTN_W: i32 = 76;
+const MOD_LABEL_W: i32 = 100;
 const CHECK_W: i32 = 78;
 const CHECK_H: i32 = 16;
 const CHECK_PITCH: i32 = 88;
@@ -771,6 +781,7 @@ struct SettingsWindowState {
     callbacks: SettingsCallbacks,
     gesture_edits: [HWND; GESTURE_ROW_COUNT],
     rebind_buttons: [HWND; GESTURE_ROW_COUNT],
+    default_buttons: [HWND; GESTURE_ROW_COUNT],
     zoom_checks: [HWND; MOD_CHECK_COUNT],
     numeric_edits: [HWND; NUMERIC_FIELD_COUNT],
     color_swatch: HWND,
@@ -1095,7 +1106,9 @@ unsafe extern "system" fn settings_wnd_proc(
                     true
                 } else if id == ID_CANCEL
                     || id == ID_EXIT
+                    || id == ID_ZOOM_DEFAULT
                     || (ID_REBIND_BASE..ID_REBIND_BASE + GESTURE_ROW_COUNT as i32).contains(&id)
+                    || (ID_DEFAULT_BASE..ID_DEFAULT_BASE + GESTURE_ROW_COUNT as i32).contains(&id)
                 {
                     draw_push_button(&*state, &*dis, ButtonRole::Secondary);
                     true
@@ -1283,13 +1296,27 @@ unsafe fn build_ui(state: &mut SettingsWindowState) -> Result<()> {
             let btn_x = edit_x + GESTURE_EDIT_W + GAP;
             state.rebind_buttons[row] = create_child(
                 WC_BUTTONW,
-                "Rebind",
+                "Set",
                 button_style,
                 px(dpi, btn_x),
                 row_y,
                 px(dpi, REBIND_BTN_W),
                 px(dpi, ROW_H),
                 ID_REBIND_BASE + row as i32,
+                parent,
+                hinst,
+                base_font,
+            )?;
+            let default_x = btn_x + REBIND_BTN_W + GAP;
+            state.default_buttons[row] = create_child(
+                WC_BUTTONW,
+                "Default",
+                button_style,
+                px(dpi, default_x),
+                row_y,
+                px(dpi, DEFAULT_BTN_W),
+                px(dpi, ROW_H),
+                ID_DEFAULT_BASE + row as i32,
                 parent,
                 hinst,
                 base_font,
@@ -1368,6 +1395,20 @@ unsafe fn build_ui(state: &mut SettingsWindowState) -> Result<()> {
                 base_font,
             )?;
         }
+        let zoom_default_x = CONTENT_X + MOD_LABEL_W + GAP + MOD_CHECK_COUNT as i32 * CHECK_PITCH;
+        create_child(
+            WC_BUTTONW,
+            "Default",
+            button_style,
+            px(dpi, zoom_default_x),
+            row_y,
+            px(dpi, DEFAULT_BTN_W),
+            px(dpi, ROW_H),
+            ID_ZOOM_DEFAULT,
+            parent,
+            hinst,
+            base_font,
+        )?;
         y += ROW_PITCH + CARD_PAD_BOTTOM;
         create_card_frame(dpi, card_top, y, parent, hinst)?;
         y += CARD_GAP;
@@ -2044,15 +2085,28 @@ unsafe fn on_command(state: *mut SettingsWindowState, wparam: WPARAM) {
             i if (ID_REBIND_BASE..ID_REBIND_BASE + GESTURE_ROW_COUNT as i32).contains(&i) => {
                 let row = (i - ID_REBIND_BASE) as usize;
                 if state.capture_row == Some(row) {
-                    // Clicking the same Rebind button again cancels capture.
+                    // Clicking the same Set button again cancels capture.
                     end_capture_restore(state);
                 } else {
                     end_capture_restore(state);
                     begin_capture(state, row);
                 }
             }
+            i if (ID_DEFAULT_BASE..ID_DEFAULT_BASE + GESTURE_ROW_COUNT as i32).contains(&i) => {
+                let row = (i - ID_DEFAULT_BASE) as usize;
+                end_capture_restore(state);
+                let gesture = GestureField::ALL[row].default_gesture();
+                GestureField::ALL[row].set(&mut state.settings.hotkeys, gesture);
+                set_text(state.gesture_edits[row], &gesture.to_display());
+                refresh_validation(state);
+            }
             i if (ID_ZOOM_CHECK_BASE..ID_ZOOM_CHECK_BASE + MOD_CHECK_COUNT as i32).contains(&i) => {
                 end_capture_restore(state);
+                refresh_validation(state);
+            }
+            ID_ZOOM_DEFAULT => {
+                end_capture_restore(state);
+                seed_modifier_checks(&state.zoom_checks, HotkeySettings::default().zoom_modifier);
                 refresh_validation(state);
             }
             ID_AUTO_START_CHECK => {
@@ -2164,7 +2218,7 @@ fn held_modifiers_snapshot() -> HeldModifiers {
 // ---------------------------------------------------------------------------
 
 /// Accent = the primary action (Save); Secondary = subdued actions (Cancel,
-/// Exit, the Rebind buttons).
+/// Exit, the Set and Default buttons).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ButtonRole {
     Accent,

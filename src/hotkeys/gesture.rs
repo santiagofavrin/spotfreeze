@@ -49,7 +49,7 @@ pub(crate) const NAMED_KEYS: &[(&str, u32)] = &[
 /// Win32 virtual-key codes of the modifier keys themselves (both the generic
 /// and the left/right variants). A gesture whose `vk` is one of these is a
 /// bare modifier chord, not a bindable hotkey.
-fn is_modifier_vk(vk: u32) -> bool {
+pub(crate) fn is_modifier_vk(vk: u32) -> bool {
     matches!(vk,
         0x10..=0x12        // VK_SHIFT, VK_CONTROL, VK_MENU (Alt)
         | 0x5B | 0x5C      // VK_LWIN, VK_RWIN
