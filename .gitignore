@@ -1,3 +1,8 @@
+# AI
+.omo/
+.opencode/
+.serena/
+
 # Rust build output
 /target
 **/*.rs.bk
@@ -13,6 +18,3 @@ spotfreeze.jsonc
 *.swp
 .DS_Store
 Thumbs.db
-
-# OpenCode local config
-.opencode
