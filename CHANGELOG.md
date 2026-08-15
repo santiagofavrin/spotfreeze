@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/santiagofavrin/spotfreeze/compare/v1.25.2...v1.26.0) (2026-08-15)
+
+
+### Features
+
+* press-to-set hotkey capture with Set/Default buttons in the settings windows ([1d8a16c](https://github.com/santiagofavrin/spotfreeze/commit/1d8a16c32b8ec5a9aa9fb89b0d7679894b796681))
+
 ## [1.25.2](https://github.com/santiagofavrin/spotfreeze/compare/v1.25.1...v1.25.2) (2026-08-14)
 
 
